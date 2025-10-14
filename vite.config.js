@@ -13,7 +13,7 @@ export default defineConfig({
       includeAssets: [
         "favicon.svg",
         "robots.txt",
-        "icons/apple-touch-icon.png",
+        "/apple-touch-icon.png",
         "icons/character03.png", // ← index.html에서 사용 중
       ],
 
@@ -29,7 +29,7 @@ export default defineConfig({
         // 나중에 192/512, maskable 아이콘 만들면 아래 배열을 교체하세요.
         icons: [
           {
-            src: "/icons/apple-touch-icon.png",
+            src: "/apple-touch-icon.png",
             sizes: "180x180",
             type: "image/png",
             purpose: "any", // 임시
