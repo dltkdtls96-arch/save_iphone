@@ -138,6 +138,13 @@ export default function SettingsView(props) {
                     안심은 10월 1일로 하세요
                   </span>
                 )}
+
+                {/* ✅ 교대 선택 시 안내 문구 */}
+                {selectedDepot === "교대" && (
+                  <span className="text-xs text-amber-300">
+                    교대는 9월 29일로 하세요
+                  </span>
+                )}
               </div>
 
               <div className="relative rounded-xl overflow-hidden bg-gray-700 focus-within:ring-2 focus-within:ring-cyan-500">
