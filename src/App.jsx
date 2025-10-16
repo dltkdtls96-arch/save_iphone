@@ -73,6 +73,7 @@ import {
   Settings,
   List,
   User,
+  Users,
   Upload,
 } from "lucide-react";
 
@@ -89,8 +90,41 @@ import {
 
 const STORAGE_KEY = "workCalendarSettingsV3"; // ← 버전 키 (구버전과 충돌 방지)
 
+function prevNightTag(yDiaNum, yPrevLabel, threshold) {
+  // 1) 전날이 숫자형이고 기준 이상 → "25~"
+  if (Number.isFinite(yDiaNum) && yDiaNum >= threshold) return `${yDiaNum}~`;
+
+  // 2) 전날이 '대n' 형태이고 n이 기준 이상 → "대5~"
+  if (typeof yPrevLabel === "string") {
+    // 🔹 공백/기호 제거하고 숫자만 추출
+    const clean = yPrevLabel.replace(/\s/g, "").trim(); // "대5 ", "대 5" → "대5"
+    const num = Number(clean.replace(/[^0-9]/g, "")); // "대5" → 5
+    const prefix = clean.replace(/[0-9]/g, ""); // "대5" → "대"
+    // (변경) 임계값과 무관하게 '대n'이면 ~
+    if (prefix === "대" && Number.isFinite(num)) {
+      return `대${num}~`;
+    }
+  }
+
+  // 그 외는 "비번"
+  return "비번";
+}
+
 // 소속(차고/센터)
-const DEPOTS = ["안심", "월배", "경산", "문양"];
+const DEPOTS = ["안심", "월배", "경산", "문양", "교대"];
+
+// 숫자 DIA만 정수로, 아니면 NaN
+const toDiaNum = (dia) => {
+  const n = Number(dia);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const ymd = (d) => [d.getFullYear(), d.getMonth() + 1, d.getDate()];
+const getYesterday = (date) => {
+  const t = new Date(date);
+  t.setDate(t.getDate() - 1);
+  return t;
+};
 
 // 소속별 샘플 테이블 (헤더 동일, 1~10, 이름 a~j)
 function sampleTableFor(depot) {
@@ -112,6 +146,43 @@ function sampleTableFor(depot) {
 
   return [header, ...rows].join("\n");
 }
+// 교대(갑/을/병) 21일(7+14) 순환 표
+// 1~7일: 주(주간) / 8~21일: 야,휴 번갈아
+function buildGyodaeTable() {
+  const header =
+    "순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근";
+
+  const DAY_IN = "09:00", DAY_OUT = "18:00";
+  const NIGHT_IN = "18:00", NIGHT_OUT = "09:00";
+
+  const rows = [];
+  for (let i = 1; i <= 21; i++) {
+    // 1~7: 주 / 8~: 야(짝수), 휴(홀수)
+    const isDay = i <= 7;
+    const isNight = !isDay && (i - 8) % 2 === 0; // 8,10,12,14,16,18,20
+    const dia = isDay ? "주" : isNight ? "야" : "휴";
+
+    let name = "";
+    if (i === 1) name = "갑반";
+    if (i === 8) name = "을반";
+    if (i === 15) name = "병반"; // ✅ 병반은 15행
+
+    // 시간: 주/야만 채움, 휴는 공란
+    let wdIn = "", wdOut = "", saIn = "", saOut = "", hoIn = "", hoOut = "";
+    if (dia === "주") {
+      wdIn = saIn = hoIn = DAY_IN;
+      wdOut = saOut = hoOut = DAY_OUT;
+    } else if (dia === "야") {
+      wdIn = saIn = hoIn = NIGHT_IN;
+      wdOut = saOut = hoOut = NIGHT_OUT;
+    }
+
+    rows.push([i, name, dia, wdIn, wdOut, saIn, saOut, hoIn, hoOut].join("\t"));
+  }
+
+  return [header, ...rows].join("\n");
+}
+
 
 const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근
 1\t신동훈\t4\t6:43\t15:23\t6:55\t16:37\ts4\ts4
@@ -253,6 +324,13 @@ function addMonthsSafe(date, months) {
   if (d.getMonth() !== ((cm % 12) + 12) % 12) d.setDate(0);
   return d;
 }
+
+function addDaysSafe(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return stripTime(d);
+}
+
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
@@ -398,6 +476,23 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
       return { in: "-", out: "-", note: "비번", combo: "-", isNight: false };
     if (label.replace(/\s/g, "").startsWith("휴"))
       return { in: "-", out: "-", note: "휴무", combo: "-", isNight: false };
+    if (label === "주" || label === "야") {
+      const tType = getDayType(date, holidaySet);
+      const src =
+        tType === "평"
+          ? row.weekday
+          : tType === "토"
+          ? row.saturday
+          : row.holiday;
+      const isNightShift = label === "야";
+      return {
+        in: src.in || "-",
+        out: src.out || "-",
+        note: `${tType}${isNightShift ? " (야간)" : ""}`,
+        combo: tType,
+        isNight: isNightShift,
+      };
+    }
     if (label.startsWith("대")) {
       const tType = getDayType(date, holidaySet);
       const src =
@@ -406,12 +501,17 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
           : tType === "토"
           ? row.saturday
           : row.holiday;
+
+      // '대n' 중 숫자만 추출
+      const n = Number(label.replace(/[^0-9]/g, ""));
+      const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
+
       return {
         in: src.in || "-",
         out: src.out || "-",
-        note: `대근·${tType}`,
+        note: `대근·${tType}${isNightShift ? " (야간)" : ""}`,
         combo: tType,
-        isNight: false,
+        isNight: isNightShift, // ← 야간으로 인식
       };
     }
   }
@@ -478,16 +578,116 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+// ⬇⬇ 여기 붙여넣기 (App() 선언보다 위)
+function useDaySwipeHandlers() {
+  const ref = React.useRef(null);
+  const [dragX, setDragX] = React.useState(0);
+  const [snapping, setSnapping] = React.useState(false);
+
+  const stateRef = React.useRef({ x: 0, y: 0, lock: null });
+  const lastRef = React.useRef({ x: 0, t: 0 });
+
+   const TH = 40;       // 스냅 거리 임계
+   const VEL = 0.35;    // 스냅 속도 임계(px/ms)
+   const ACT = 14;      // 방향 잠금 시작(살짝 올림)
+   const DIR = 1.25;    // 방향 우세 비율(가로가 세로보다 1.25배 이상 커야 가로로 잠금)
+  const SNAP = 280;   // 애니 시간(ms)
+
+  const onStart = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
+    const t = e.touches[0];
+    stateRef.current = { x: t.clientX, y: t.clientY, lock: null };
+    lastRef.current = { x: t.clientX, t: performance.now() };
+    setSnapping(false);
+    setDragX(0);
+    //e.stopPropagation?.();
+   // ❌ 여기서 stopPropagation 하지 말 것!
+  };
+
+  const onMove = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
+    const t = e.touches[0];
+    const dx = t.clientX - stateRef.current.x;
+    const dy = t.clientY - stateRef.current.y;
+
+    if (stateRef.current.lock === null) {
+           if (Math.abs(dx) > Math.abs(dy) * DIR && Math.abs(dx) > ACT) {
+        stateRef.current.lock = "h";
+             } else if (Math.abs(dy) > Math.abs(dx) * DIR && Math.abs(dy) > ACT) {
+        stateRef.current.lock = "v";
+      }
+    }
+    if (stateRef.current.lock === "h") {
+           if (e.cancelable) e.preventDefault();
+           e.stopPropagation?.();  
+      setDragX(dx);
+      lastRef.current = { x: t.clientX, t: performance.now() };
+    }
+  };
+
+  const onEnd = (onPrev, onNext) => (e) => {
+      if (stateRef.current.lock !== "h") { // 가로로 잠금 안 됐으면 아무 것도 안 함(세로에 맡김)
+      setDragX(0);
+      return;
+    }
+    const t = e.changedTouches[0];
+    const now = performance.now();
+    const dt = Math.max(1, now - lastRef.current.t);
+    const vx = (t.clientX - lastRef.current.x) / dt;
+    const dx = t.clientX - stateRef.current.x;
+
+    const width = ref.current?.offsetWidth || window.innerWidth;
+    const goNext = dx < 0 && (Math.abs(dx) > TH || Math.abs(vx) > VEL);
+    const goPrev = dx > 0 && (Math.abs(dx) > TH || Math.abs(vx) > VEL);
+
+    setSnapping(true);
+    if (goNext) {
+      setDragX(-width);
+      setTimeout(() => {
+        onNext?.();
+        setSnapping(false);
+        setDragX(0);
+      }, SNAP);
+    } else if (goPrev) {
+      setDragX(width);
+      setTimeout(() => {
+        onPrev?.();
+        setSnapping(false);
+        setDragX(0);
+      }, SNAP);
+    } else {
+      setDragX(0);
+      setTimeout(() => setSnapping(false), SNAP);
+    }
+    stateRef.current = { x: 0, y: 0, lock: null };
+  };
+
+  const style = {
+    transform: `translateX(${dragX}px)`,
+    transition: snapping ? `transform ${SNAP}ms ease-out` : "none",
+    willChange: "transform",
+  };
+
+  return { ref, onStart, onMove, onEnd, style };
+}
+// ⬆⬆ 여기까지
+
+
 /* ===========================================
  * App
  * ===========================================*/
 
 export default function App() {
   const [selectedTab, setSelectedTab] = useState("home");
+  // 전체교번 정렬 모드: 'person'(기존 사람 순번) | 'dia'(DIA 순서)
+  const [orderMode, setOrderMode] = useState("person");
 
   // 오늘/선택일
   const today = stripTime(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
+  // ⬇︎ 추가: 좌우 스와이프 시 하루 전/후 이동
+const goPrevDay = () => setSelectedDate((d) => addDaysSafe(d, -1));
+const goNextDay = () => setSelectedDate((d) => addDaysSafe(d,  1));
 
   const [tempName, setTempName] = useState(""); // 홈 탭용 임시 이름
   // 👉 슬라이드 애니메이션을 위한 상태/참조
@@ -495,14 +695,30 @@ export default function App() {
   const [dragX, setDragX] = useState(0); // 손가락 따라 이동하는 x(px)
   const [isSnapping, setIsSnapping] = useState(false); // 스냅 중이면 true
 
-  // 회전 "기준일" — 기본은 오늘
-  const [anchorDateStr, setAnchorDateStr] = useState(fmt(today));
+  // 소속 선택
+  const [selectedDepot, setSelectedDepot] = useState("안심");
+
+  // 소속별 회전 "기준일" 맵 (안심은 기본 2025-10-01, 나머지는 오늘)
+  const defaultAnchorMap = useMemo(
+    () =>
+      Object.fromEntries(
+        DEPOTS.map((d) => [d, d === "안심" ? "2025-10-01" : fmt(today)])
+      ),
+    [] // mount 시 1회
+  );
+  const [anchorDateByDepot, setAnchorDateByDepot] = useState(defaultAnchorMap);
+
+  // 현재 선택 소속의 기준일 문자열
+  const anchorDateStr = anchorDateByDepot[selectedDepot] ?? fmt(today);
+  // Date 객체
   const anchorDate = useMemo(
     () => stripTime(new Date(anchorDateStr)),
     [anchorDateStr]
   );
-  // 소속 선택
-  const [selectedDepot, setSelectedDepot] = useState("안심");
+
+  // 소속별 기준일 setter
+  const setAnchorDateStrForDepot = (depot, value) =>
+    setAnchorDateByDepot((prev) => ({ ...prev, [depot]: value }));
 
   // ✅ 여기에 추가
   const [tablesByDepot, setTablesByDepot] = useState({
@@ -510,6 +726,7 @@ export default function App() {
     월배: sampleTableFor("월배"),
     경산: sampleTableFor("경산"),
     문양: sampleTableFor("문양"),
+    교대: buildGyodaeTable(), // ⬅️ new
   });
 
   // 데이터/이름 목록
@@ -547,6 +764,7 @@ export default function App() {
     월배: "",
     경산: "",
     문양: "",
+    교대: "", // ⬅️ new (원하면 "갑반"으로 기본값 넣어도 됩니다)
   });
   const myName = myNameMap[selectedDepot] || "";
   const setMyNameForDepot = (depot, name) =>
@@ -594,6 +812,7 @@ export default function App() {
     월배: 5,
     경산: 5,
     문양: 5,
+    교대: 5, // ⬅️ new (교대는 '야/휴'가 문자열이라 임계치 영향은 사실상 없음)
   });
   // 선택된 소속의 야간 기준값 (기존 nightDiaThreshold 대체)
   const nightDiaThreshold = nightDiaByDepot[selectedDepot] ?? 25;
@@ -602,6 +821,8 @@ export default function App() {
 
   // 여러 사람 강조 색상: { [name]: "#RRGGBB" }
   const [highlightMap, setHighlightMap] = useState({});
+  // ✅ 비교 탭: 선택된 사람들
+  const [compareSelected, setCompareSelected] = useState([]);
   // ===== 상단 state 부근에 추가 =====
   const [loaded, setLoaded] = useState(false); // 로컬스토리지에서 다 읽어왔는지 플래그
   const SAVE_DEBOUNCE = 300; // 저장 디바운스(ms)
@@ -763,7 +984,16 @@ export default function App() {
         setMyNameForDepot("안심", s.myName);
       }
 
-      if (s.anchorDateStr) setAnchorDateStr(s.anchorDateStr);
+      if (s.anchorDateByDepot) {
+        setAnchorDateByDepot(s.anchorDateByDepot);
+      } else if (s.anchorDateStr) {
+        // 구버전 호환: 모든 소속에 동일 기준일 적용
+        const same = Object.fromEntries(
+          DEPOTS.map((d) => [d, s.anchorDateStr])
+        );
+        setAnchorDateByDepot(same);
+      }
+
       //if (s.holidaysText) setHolidaysText(s.holidaysText);
       if (s.holidaysText) setHolidaysText(s.holidaysText);
       // 저장된 값이 비거나 공백뿐이면 기본값으로 보정
@@ -773,6 +1003,8 @@ export default function App() {
       //if (typeof s.nightDiaThreshold === "number")
       // setNightDiaThreshold(s.nightDiaThreshold);
       if (s.highlightMap) setHighlightMap(s.highlightMap);
+      if (Array.isArray(s.compareSelected))
+        setCompareSelected(s.compareSelected);
       if (s.selectedDate) setSelectedDate(stripTime(new Date(s.selectedDate)));
       if (s.routeImageMap) setRouteImageMap(s.routeImageMap);
     } catch (e) {
@@ -814,6 +1046,12 @@ export default function App() {
       }
     }
   }, [selectedTab]);
+// ✅ 비교 탭 들어올 때도 오늘로 고정
+useEffect(() => {
+  if (selectedTab === "compare") {
+    if (fmt(selectedDate) !== fmt(today)) setSelectedDate(today);
+  }
+}, [selectedTab]);
 
   // ✅ 행로 탭으로 들어올 때는 항상 panel0로 강제 리셋
   useEffect(() => {
@@ -887,7 +1125,7 @@ export default function App() {
       //myName,
       myNameMap,
       selectedDepot,
-      anchorDateStr,
+      anchorDateByDepot, // ✅ 소속별 기준일 저장
       holidaysText,
       //nightDiaThreshold,
       nightDiaByDepot,
@@ -896,6 +1134,7 @@ export default function App() {
       tablesByDepot,
       selectedDate: fmt(selectedDate),
       routeImageMap, // 서버 URL만 보관할 예정(2번에서 수정)
+      compareSelected,
     };
 
     const timer = setTimeout(() => {
@@ -921,7 +1160,7 @@ export default function App() {
     loaded,
     //myName,
     myNameMap,
-    anchorDateStr,
+    anchorDateByDepot,
     holidaysText,
     nightDiaByDepot,
     //nightDiaThreshold,
@@ -930,6 +1169,7 @@ export default function App() {
     tablesByDepot,
     selectedDate,
     routeImageMap,
+    compareSelected,
   ]);
 
   // ✅ RosterGrid에서 접근 가능하게 전역 등록
@@ -956,6 +1196,181 @@ export default function App() {
     });
   }
 
+  // === DIA 순서 보기용 데이터 (전체교번 정렬/그룹) ===
+  const diaViewData = useMemo(() => {
+    if (!nameList?.length) return null;
+
+    const yester = getYesterday(selectedDate);
+
+    const entriesToday = nameList.map((name) => {
+      const row = rowAtDateForName(name, selectedDate);
+      const todayDia = row?.dia;
+
+      let type = "work"; // work | dae | biban | holiday
+      let diaNum = toDiaNum(todayDia);
+      let daeNum = null;
+
+      if (typeof todayDia === "string") {
+        const clean = todayDia.replace(/\s/g, "");
+        if (clean.startsWith("휴")) {
+          type = "holiday";
+        } else if (clean.includes("비번") || clean === "비") {
+          type = "biban";
+        } else if (/^대\d+$/i.test(clean)) {
+          type = "dae";
+          daeNum = Number(clean.replace(/[^0-9]/g, ""));
+        }
+      }
+
+      // 비번/대근은 전날 DIA도 같이 들고간다(정렬/태깅용)
+      let yDiaNum = null;
+      let yPrevLabel = null;
+      if (type === "biban" || type === "dae") {
+        const yRow = rowAtDateForName(name, yester);
+        yPrevLabel = yRow?.dia ?? null;
+        const n = toDiaNum(yPrevLabel);
+        yDiaNum = Number.isFinite(n) ? n : null;
+      }
+
+      return { name, todayDia, type, diaNum, daeNum, yDiaNum, yPrevLabel };
+    });
+
+    // 1) 숫자 DIA(근무) → 2) 대근(대1~) → 3) 비번 → 4) 휴무
+    const work = entriesToday
+      .filter((e) => e.type === "work" && Number.isFinite(e.diaNum))
+      .sort((a, b) => a.diaNum - b.diaNum);
+
+    const dae = entriesToday
+      .filter((e) => e.type === "dae" && Number.isFinite(e.daeNum))
+      .sort(
+        (a, b) =>
+          a.daeNum - b.daeNum ||
+          String(a.name).localeCompare(String(b.name), "ko")
+      );
+
+    const biban = entriesToday
+      .filter((e) => e.type === "biban")
+      .sort((a, b) => {
+        const ak = a.yDiaNum ?? 9999;
+        const bk = b.yDiaNum ?? 9999;
+        if (ak !== bk) return ak - bk;
+        return String(a.name).localeCompare(String(b.name), "ko");
+      });
+
+    const holiday = entriesToday
+      .filter((e) => e.type === "holiday")
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
+
+    return { work, dae, biban, holiday };
+  }, [nameList, selectedDate, nightDiaThreshold, selectedDepot]);
+  // === DIA 순서 그리드용 1차원 배열 ===
+  const diaGridRows = useMemo(() => {
+    if (!nameList?.length) return [];
+
+    const yester = getYesterday(selectedDate);
+
+    const entries = nameList.map((name) => {
+      const rowToday = rowAtDateForName(name, selectedDate);
+      const todayDia = rowToday?.dia;
+
+      let type = "work"; // work | dae | biban | holiday
+      let diaNum = toDiaNum(todayDia);
+      let daeNum = null;
+
+      if (typeof todayDia === "string") {
+        const clean = todayDia.replace(/\s/g, "");
+        if (clean.startsWith("휴")) {
+          type = "holiday";
+        } else if (clean.includes("비번") || clean === "비") {
+          type = "biban";
+        } else if (/^대\d+$/i.test(clean)) {
+          type = "dae";
+          daeNum = Number(clean.replace(/[^0-9]/g, ""));
+        }
+      }
+
+      // 비번/대근은 전날 DIA를 함께 확인(정렬·꼬리표용)
+      let yDiaNum = null;
+      if (type === "biban" || type === "dae") {
+        const yRow = rowAtDateForName(name, yester);
+        const n = toDiaNum(yRow?.dia);
+        yDiaNum = Number.isFinite(n) ? n : null;
+      }
+
+      return { name, row: rowToday, type, diaNum, daeNum, yDiaNum };
+    });
+
+    const work = entries
+      .filter((e) => e.type === "work" && Number.isFinite(e.diaNum))
+      .sort((a, b) => a.diaNum - b.diaNum);
+
+    const dae = entries
+      .filter((e) => e.type === "dae" && Number.isFinite(e.daeNum))
+      .sort(
+        (a, b) =>
+          a.daeNum - b.daeNum ||
+          String(a.name).localeCompare(String(b.name), "ko")
+      );
+
+    const biban = entries
+      .filter((e) => e.type === "biban")
+      .sort((a, b) => {
+        const ak = a.yDiaNum ?? 9999;
+        const bk = b.yDiaNum ?? 9999;
+        if (ak !== bk) return ak - bk;
+        return String(a.name).localeCompare(String(b.name), "ko");
+      });
+
+    const holiday = entries
+      .filter((e) => e.type === "holiday")
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
+
+    // 화면에 뿌릴 순서: 숫자 DIA → 대근 → 비번 → 휴무
+    return [...work, ...dae, ...biban, ...holiday].map(
+      ({ name, row, type }) => {
+        let displayDia = row?.dia;
+
+        // '대n'인 경우 전날 야간 여부에 따라 꼬리(~)
+        if (
+          typeof displayDia === "string" &&
+          displayDia.trim().startsWith("대")
+        ) {
+          const yRow = rowAtDateForName(name, yester);
+          const yDia = yRow?.dia;
+          const yNum = toDiaNum(yDia);
+          let prevNight = false;
+
+          if (Number.isFinite(yNum) && yNum >= nightDiaThreshold)
+            prevNight = true;
+          if (typeof yDia === "string" && /^대\s*\d+$/.test(yDia))
+            prevNight = true;
+
+          if (prevNight) displayDia = `${displayDia.replace(/\s+/g, "")}~`;
+        }
+
+        // 비번: 전날 야간이면 '25~' 혹은 '대5~'처럼 표기
+        if (type === "biban") {
+          const yRow = rowAtDateForName(name, yester);
+          const yDiaRaw = yRow?.dia;
+          const yDia =
+            typeof yDiaRaw === "string"
+              ? yDiaRaw.trim().replace(/\s+/g, "")
+              : yDiaRaw;
+          let prevNight = false;
+
+          const n = toDiaNum(yDia);
+          if (Number.isFinite(n) && n >= nightDiaThreshold) prevNight = true;
+          if (typeof yDia === "string" && /^대\d+$/.test(yDia))
+            prevNight = true;
+
+          displayDia = prevNight ? `${String(yDia)}~` : "비번";
+        }
+
+        return { name, row: { ...row, dia: displayDia } };
+      }
+    );
+  }, [nameList, selectedDate, nightDiaThreshold, selectedDepot]);
+
   // 캘린더 그리드
   // 캘린더 그리드
   const days = monthGridMonday(selectedDate);
@@ -972,6 +1387,7 @@ export default function App() {
   const SNAP_MS = 320;
 
   const onCalTouchStart = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
     const t = e.touches[0];
     swipeRef.current = { x: t.clientX, y: t.clientY, lock: null };
     lastMoveRef.current = { x: t.clientX, t: performance.now() };
@@ -980,6 +1396,7 @@ export default function App() {
   };
 
   const onCalTouchMove = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
     const t = e.touches[0];
     const dx = t.clientX - swipeRef.current.x;
     const dy = t.clientY - swipeRef.current.y;
@@ -1056,11 +1473,11 @@ export default function App() {
   //const V_SW_THRESHOLD = 10; // 이동거리 임계(px)
   //const V_VELOCITY_THRESHOLD = 0.1; // 속도 임계(px/ms)
   //const V_SNAP_MS = 320;
-
-  const V_SNAP_MS = 300; // transform/height 전환 시간을 통일
+  const V_SNAP_MS = 300;
   const V_DIST_RATIO = 0.1;
   const V_VELOCITY_THRESHOLD = 0.1;
-  const V_ACTIVATE = 1;
+  const V_ACTIVATE = 12;   // 시작 임계 조금 올림
+  const V_DIR = 1.2;       // 세로 우세 비율
 
   // iOS 스타일 러버밴드 (limit 바깥으로 당기면 저항)
   function rubberband(distance, limit) {
@@ -1148,6 +1565,7 @@ export default function App() {
     const [pendingDir, setPendingDir] = React.useState(null); // 'next' | 'prev' | null
 
     const onStart = (e) => {
+      if (e.target.closest("[data-no-gesture]")) return;
       const t = e.touches[0];
       swipeRef.current = { x: t.clientX, y: t.clientY, lock: null };
       lastMoveRef.current = { y: t.clientY, t: performance.now() };
@@ -1158,21 +1576,22 @@ export default function App() {
       }
     };
     const onMove = (e) => {
+      if (e.target.closest("[data-no-gesture]")) return;
       const t = e.touches[0];
       const dx = t.clientX - swipeRef.current.x;
       const dy = t.clientY - swipeRef.current.y;
 
       if (swipeRef.current.lock === null) {
-        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > V_ACTIVATE) {
+        if (Math.abs(dy) > Math.abs(dx) * V_DIR && Math.abs(dy) > V_ACTIVATE) {
           swipeRef.current.lock = "v";
           lockBodyScroll();
-        } else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > V_ACTIVATE) {
+            } else if (Math.abs(dx) > Math.abs(dy) * V_DIR && Math.abs(dx) > V_ACTIVATE) {
           swipeRef.current.lock = "h";
         }
       }
       if (swipeRef.current.lock !== "v") return;
 
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault(); // 경고 방지
 
       const wrap = kind === "home" ? homeWrapRef.current : routeWrapRef.current;
       const page = kind === "home" ? homePage : routePage;
@@ -1305,6 +1724,11 @@ export default function App() {
   const vHome = makeVerticalHandlers("home");
   const vRoute = makeVerticalHandlers("route");
 
+  const swipeHomeP1 = useDaySwipeHandlers();   // 홈탭 panel1 (선택일 전체교번)
+const swipeRosterP0 = useDaySwipeHandlers(); // 전체탭 panel0
+const swipeRouteP0 = useDaySwipeHandlers();  // 행로탭 panel0
+const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
+
   // 업로드 (표)
   async function onUpload(e) {
     const f = e.target.files?.[0];
@@ -1324,7 +1748,11 @@ export default function App() {
     // 화면 상태 초기화
     setSelectedTab("home");
     setSelectedDate(today);
-    setAnchorDateStr(fmt(today));
+    setAnchorDateByDepot(
+      Object.fromEntries(
+        DEPOTS.map((d) => [d, d === "안심" ? "2025-10-01" : fmt(today)])
+      )
+    );
     setSelectedDepot("안심");
 
     // ✅ 소속별 테이블 리셋
@@ -1333,6 +1761,7 @@ export default function App() {
       월배: sampleTableFor("월배"),
       경산: sampleTableFor("경산"),
       문양: sampleTableFor("문양"),
+      교대: buildGyodaeTable(), // ⬅️ new
     });
 
     // ✅ 소속별 내 이름 리셋
@@ -1341,6 +1770,7 @@ export default function App() {
       월배: "",
       경산: "",
       문양: "",
+      교대: "", // ⬅️ new (원하면 "갑반"으로 기본값 넣어도 됩니다)
     });
 
     // ✅ 소속별 야간 규칙 리셋 (안심=25, 나머지=5)
@@ -1349,6 +1779,7 @@ export default function App() {
       월배: 5,
       경산: 5,
       문양: 5,
+      교대: 5, // ⬅️ new
     });
 
     // ✅ 기타 상태들 리셋
@@ -1374,7 +1805,8 @@ export default function App() {
           WebkitOverflowScrolling: "touch", // ✅ iOS 스크롤 자연스럽게
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          touchAction: selectedTab === "settings" ? "pan-y" : "none",
+          //touchAction: selectedTab === "settings" ? "pan-y" : "none",
+          touchAction: "manipulation",
         }}
       >
         {/* 홈(캘린더 + 선택일 전체 다이아) */}
@@ -1384,7 +1816,7 @@ export default function App() {
             className="mt-4 select-none overflow-hidden rounded-2xl overscroll-contain"
             style={{
               height: slideViewportH,
-              touchAction: isHomeCalLocked ? "none" : "auto",
+                  touchAction: isHomeCalLocked ? "none" : "pan-y",
             }}
             onTouchStart={vHome.onStart}
             onTouchMove={vHome.onMove}
@@ -1432,48 +1864,48 @@ export default function App() {
                 className="bg-gray-800 rounded-2xl p-3 shadow mb-7"
                 style={{ minHeight: slideViewportH }}
               >
-                {/* === 캘린더 카드 헤더 === */}
-                <div className="flex items-center justify-between mb-0">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <CalendarIcon className="w-5 h-5" /> 캘린더
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="px-2 py-1 rounded-xl bg-gray-700 text-xs"
-                      onClick={() =>
-                        setSelectedDate(addMonthsSafe(selectedDate, -1))
-                      }
-                    >
-                      이전
-                    </button>
-                    <div className="px-2 py-1 rounded-xl bg-gray-700 text-xs">
-                      {selectedDate.getFullYear()}년{" "}
-                      {selectedDate.getMonth() + 1}월
-                    </div>
-                    <button
-                      className="px-2 py-1 rounded-xl bg-gray-700 text-xs"
-                      onClick={() =>
-                        setSelectedDate(addMonthsSafe(selectedDate, 1))
-                      }
-                    >
-                      다음
-                    </button>
-                    {/* ✅ '오늘로'는 선택된 날짜가 오늘이 아닐 때만 보이게.
-       하이라이트(calHasSelection)와 무관하게 표시됩니다. */}
-                    {fmt(selectedDate) !== fmt(today) && (
-                      <button
-                        className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
-                        onClick={() => {
-                          setSelectedDate(today);
-                          setCalHasSelection(true); // 하이라이트 복구
-                          lastClickedRef.current = fmt(today); // 더블탭 기준 동기화
-                        }}
-                      >
-                        오늘로
-                      </button>
-                    )}
-                  </div>
-                </div>
+               
+ {/* === 캘린더 카드 헤더 === */}
+<div className="flex items-center justify-between mb-0">
+  <h2 className="text-lg font-semibold flex items-center gap-2">
+    <CalendarIcon className="w-5 h-5" />
+    {selectedDate.getFullYear()}년 {selectedDate.getMonth() + 1}월
+  </h2>
+
+  <div className="flex items-center gap-2">
+    {/* 연/월 선택 */}
+    <input
+      type="month"
+      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+      value={`${selectedDate.getFullYear()}-${String(
+        selectedDate.getMonth() + 1
+      ).padStart(2, "0")}`}
+      onChange={(e) => {
+        const [y, m] = e.target.value.split("-").map(Number);
+        const d = stripTime(new Date(y, (m || 1) - 1, 1));
+        setSelectedDate(d);
+        setCalHasSelection(false); // 월 넘기면 당일 하이라이트 해제
+      }}
+      title="연/월 선택"
+    />
+
+    {/* 오늘로 */}
+    {fmt(selectedDate) !== fmt(today) && (
+      <button
+        className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
+        onClick={() => {
+          setSelectedDate(today);
+          setCalHasSelection(true);
+          lastClickedRef.current = fmt(today);
+        }}
+      >
+        오늘로
+      </button>
+    )}
+  </div>
+</div>
+
+
 
                 {/* 대상/소속 셀렉트 */}
                 <div className="flex items-center gap-3 mb-2 flex-wrap">
@@ -1633,30 +2065,30 @@ export default function App() {
                             const isLastRowCompressed =
                               compressLastRow && rowIndex === 5;
 
-                            let diaColorClass = "";
-                            if (typeof row?.dia === "number") {
-                              diaColorClass =
-                                row.dia >= nightDiaThreshold
-                                  ? "text-sky-300"
-                                  : "text-yellow-300";
-                            } else if (
-                              typeof row?.dia === "string" &&
-                              row.dia.startsWith("대")
-                            ) {
-                              const nextDate = new Date(d);
-                              nextDate.setDate(d.getDate() + 1);
-                              const nextRow = rowAtDateForName(
-                                activeName,
-                                nextDate
-                              );
-                              const nextDia = nextRow?.dia;
-                              const nextIsBibeon =
-                                typeof nextDia === "string" &&
-                                nextDia.replace(/\s/g, "").includes("비번");
-                              diaColorClass = nextIsBibeon
-                                ? "text-sky-300"
-                                : "text-yellow-300";
-                            }
+                               let diaColorClass = "";
+                               if (selectedDepot === "교대") {
+                                 const label = (typeof row?.dia === "string" ? row.dia : "").replace(/\s/g, "");
+                                 if (label === "주") diaColorClass = "text-yellow-300";
+                                 else if (label === "야") diaColorClass = "text-sky-300";
+                                 // "휴" 또는 그 외는 색 없음(기본)
+                               } else {
+                                 if (typeof row?.dia === "number") {
+                                   diaColorClass =
+                                     row.dia >= nightDiaThreshold ? "text-sky-300" : "text-yellow-300";
+                                 } else if (
+                                   typeof row?.dia === "string" &&
+                                   row.dia.replace(/\s/g, "").startsWith("대")
+                                 ) {
+                                   const nextDate = new Date(d);
+                                   nextDate.setDate(d.getDate() + 1);
+                                   const nextRow = rowAtDateForName(activeName, nextDate);
+                                   const nextDia = nextRow?.dia;
+                                   const nextIsBibeon =
+                                     typeof nextDia === "string" &&
+                                     nextDia.replace(/\s/g, "").includes("비번");
+                                   diaColorClass = nextIsBibeon ? "text-sky-300" : "text-yellow-300";
+                                 }
+                               }
 
                             return (
                               <button
@@ -1744,13 +2176,13 @@ export default function App() {
                                     <div className="truncate text-[clamp(9px,1vw,11px)] max-w-[50px]">
                                       {t.out}
                                     </div>
-                                    <div className="truncate text-[clamp(8px,1vw,11px)] max-w-[50px]">
-                                      {t.isNight ? (
-                                        `${t.combo}`
-                                      ) : (
-                                        <span className="invisible">공백</span>
-                                      )}
-                                    </div>
+                                     <div className="truncate text-[clamp(8px,1vw,11px)] max-w-[50px]">
+   {t.isNight && selectedDepot !== "교대" ? (
+     `${t.combo}`
+   ) : (
+     <span className="invisible">공백</span>
+   )}
+ </div>
                                   </div>
                                 </div>
                               </button>
@@ -1763,96 +2195,215 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Panel 1: 선택일 전체 교번 */}
-              <div
-                ref={homePanelRefs[1]}
-                className="bg-gray-800 rounded-2xl p-3 shadow shadow "
-                style={{ minHeight: slideViewportH }}
-              >
-                <h3 className="text-base font-semibold mb-2 flex items-center gap-2">
-                  <List className="w-5 h-5" /> 전체 교번 (선택일)
-                </h3>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-s text-red-300">
-                    {fmtWithWeekday(selectedDate)}
-                  </div>
-                  <div className="flex-1" />
-                  <input
-                    type="date"
-                    className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-                    value={fmt(selectedDate)}
-                    onChange={(e) =>
-                      setSelectedDate(stripTime(new Date(e.target.value)))
-                    }
-                  />
-                </div>
+             {/* Panel 1: 선택일 전체 교번 */}
+<div
+  ref={homePanelRefs[1]}
+  className="bg-gray-800 rounded-2xl p-3 shadow"
+  style={{ minHeight: slideViewportH }}
+>
+  {/* 1줄: 제목 + 날짜/요일/오늘로 */}
+  <div className="flex items-center justify-between mb-2" data-no-gesture>
+    <h3 className="text-lg font-semibold flex items-center gap-2">
+      <List className="w-5 h-5" /> 전체 교번
+    </h3>
 
-                <RosterGrid
-                  rows={rosterAt(selectedDate)}
-                  holidaySet={holidaySet}
-                  date={selectedDate}
-                  nightDiaThreshold={nightDiaThreshold}
-                  highlightMap={highlightMap}
-                  onPick={(name) => {
-                    setRouteTargetName(name);
-                    if (window.triggerRouteTransition) {
-                      window.triggerRouteTransition();
-                    } else {
-                      setSelectedTab("route");
-                    }
-                  }}
-                />
-              </div>
+    <div className="flex items-center gap-2 flex-wrap">
+      <input
+        type="date"
+        className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+        value={fmt(selectedDate)}
+        onChange={(e) => setSelectedDate(stripTime(new Date(e.target.value)))}
+        title="날짜 선택"
+      />
+      <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
+        {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+      </span>
+      {fmt(selectedDate) !== fmt(today) && (
+        <button
+          className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
+          onClick={() => setSelectedDate(stripTime(new Date()))}
+          title="오늘로"
+        >
+          오늘로
+        </button>
+      )}
+    </div>
+  </div>
+
+  {/* 2줄: 보기 전환 */}
+  <div className="flex justify-end mb-2" data-no-gesture>
+    <button
+      className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
+      onClick={() => setOrderMode((m) => (m === "person" ? "dia" : "person"))}
+      aria-pressed={orderMode === "dia"}
+      title={orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+    >
+      {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+    </button>
+  </div>
+
+  {orderMode === "person" && (
+    <RosterGrid
+      rows={rosterAt(selectedDate)}
+      holidaySet={holidaySet}
+      date={selectedDate}
+      nightDiaThreshold={nightDiaThreshold}
+      highlightMap={highlightMap}
+      onPick={(name) => {
+        setRouteTargetName(name);
+        if (window.triggerRouteTransition) window.triggerRouteTransition();
+        else setSelectedTab("route");
+      }}
+      daySwipe={{
+        ref: swipeHomeP1.ref,
+        onStart: swipeHomeP1.onStart,
+        onMove: swipeHomeP1.onMove,
+        onEnd: swipeHomeP1.onEnd(goPrevDay, goNextDay),
+        style: swipeHomeP1.style,
+      }}
+    />
+  )}
+
+  {orderMode === "dia" && (
+    <RosterGrid
+      rows={diaGridRows}
+      holidaySet={holidaySet}
+      date={selectedDate}
+      nightDiaThreshold={nightDiaThreshold}
+      highlightMap={highlightMap}
+      onPick={(name) => {
+        setRouteTargetName(name);
+        if (window.triggerRouteTransition) window.triggerRouteTransition();
+        else setSelectedTab("route");
+      }}
+      daySwipe={{
+        ref: swipeHomeP1.ref,
+        onStart: swipeHomeP1.onStart,
+        onMove: swipeHomeP1.onMove,
+        onEnd: swipeHomeP1.onEnd(goPrevDay, goNextDay),
+        style: swipeHomeP1.style,
+      }}
+    />
+  )}
+</div>
+
             </div>
           </div>
         )}
 
-        {/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
-        {selectedTab === "roster" && (
-          <div
-            className="bg-gray-800 rounded-2xl p-3 shadow mt-4"
-            style={{ minHeight: slideViewportH }}
+{/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
+{/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
+{selectedTab === "roster" && (
+  <div
+    className="bg-gray-800 rounded-2xl p-3 shadow mt-4"
+    style={{ minHeight: slideViewportH }}
+  >
+    {/* 1줄: 제목 + 날짜/요일/오늘로 */}
+    <div className="flex items-center justify-between mb-2" data-no-gesture>
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+      <List className="w-5 h-5" /> 전체 교번 
+      </h2>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 날짜 선택 */}
+        <input
+          type="date"
+          className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+          value={fmt(selectedDate)}
+          onChange={(e) => setSelectedDate(stripTime(new Date(e.target.value)))}
+          title="날짜 선택"
+        />
+        {/* 요일 배지 */}
+        <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
+          {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+        </span>
+        {/* 오늘로 (오늘이 아닐 때만) */}
+        {fmt(selectedDate) !== fmt(today) && (
+          <button
+            className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
+            onClick={() => setSelectedDate(stripTime(new Date()))}
+            title="오늘로"
           >
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <List className="w-5 h-5" /> {fmtWithWeekday(selectedDate)}
-              </h2>
-
-              <select
-                className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-                value={selectedDepot}
-                onChange={(e) => setSelectedDepot(e.target.value)}
-              >
-                {DEPOTS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="date"
-                className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-                value={fmt(selectedDate)}
-                onChange={(e) =>
-                  setSelectedDate(stripTime(new Date(e.target.value)))
-                }
-              />
-            </div>
-            <RosterGrid
-              rows={rosterAt(selectedDate)}
-              holidaySet={holidaySet}
-              date={selectedDate}
-              nightDiaThreshold={nightDiaThreshold}
-              highlightMap={highlightMap}
-              onPick={(name) => {
-                setRouteTargetName(name);
-                setSelectedTab("route");
-                setRoutePage(0);
-                setDragYRoute(0);
-              }}
-            />
-          </div>
+            오늘로
+          </button>
         )}
+      </div>
+    </div>
+
+    {/* 2줄: 소속 + 보기 전환 */}
+    <div
+      className="flex items-center justify-between mb-2 gap-2 flex-wrap"
+      data-no-gesture
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-300">소속</span>
+        <select
+          className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+          value={selectedDepot}
+          onChange={(e) => setSelectedDepot(e.target.value)}
+          title="소속 선택"
+        >
+          {DEPOTS.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+      </div>
+
+      <button
+        className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
+        onClick={() => setOrderMode((m) => (m === "person" ? "dia" : "person"))}
+        aria-pressed={orderMode === "dia"}
+        title={orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+      >
+        {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+      </button>
+    </div>
+
+    {orderMode === "person" && (
+      <RosterGrid
+        rows={rosterAt(selectedDate)}
+        holidaySet={holidaySet}
+        date={selectedDate}
+        nightDiaThreshold={nightDiaThreshold}
+        highlightMap={highlightMap}
+        onPick={(name) => {
+          setRouteTargetName(name);
+          triggerRouteTransition();
+        }}
+        daySwipe={{
+          ref: swipeRosterP0.ref,
+          onStart: swipeRosterP0.onStart,
+          onMove: swipeRosterP0.onMove,
+          onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+          style: swipeRosterP0.style,
+        }}
+      />
+    )}
+
+    {orderMode === "dia" && (
+      <RosterGrid
+        rows={diaGridRows}
+        holidaySet={holidaySet}
+        date={selectedDate}
+        nightDiaThreshold={nightDiaThreshold}
+        highlightMap={highlightMap}
+        onPick={(name) => {
+          setRouteTargetName(name);
+          if (window.triggerRouteTransition) window.triggerRouteTransition();
+          else setSelectedTab("route");
+        }}
+        daySwipe={{
+          ref: swipeRosterP0.ref,
+          onStart: swipeRosterP0.onStart,
+          onMove: swipeRosterP0.onMove,
+          onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+          style: swipeRosterP0.style,
+        }}
+      />
+    )}
+  </div>
+)}
+
 
         {/* 행로표 */}
         {selectedTab === "route" && (
@@ -1861,7 +2412,7 @@ export default function App() {
             className="mt-4 select-none overflow-hidden rounded-2xl overscroll-contain"
             style={{
               height: slideViewportH,
-              touchAction: isRouteLocked ? "none" : "auto",
+                  touchAction: isRouteLocked ? "none" : "pan-y",
             }}
             onTouchStart={vRoute.onStart}
             onTouchMove={vRoute.onMove}
@@ -1915,36 +2466,50 @@ export default function App() {
                     <User className="w-5 h-5" /> 행로표 (
                     {routeTargetName || myName})
                   </h2>
-                  <div className="flex gap-2">
-                    <select
-                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-                      value={selectedDepot}
-                      onChange={(e) => setSelectedDepot(e.target.value)}
-                    >
-                      {DEPOTS.map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="date"
-                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-                      value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
-                    />
-                    {routeTargetName && (
-                      <button
-                        className="px-2 py-1 rounded-xl bg-orange-700 hover:bg-gray-600 text-xs"
-                        onClick={() => setRouteTargetName("")}
-                        title="내 이름으로 보기"
-                      >
-                        내이름
-                      </button>
-                    )}
-                  </div>
+                  <div className="flex gap-2 items-center">
+  <select
+    className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+    value={selectedDepot}
+    onChange={(e) => setSelectedDepot(e.target.value)}
+  >
+    {DEPOTS.map((d) => (
+      <option key={d} value={d}>{d}</option>
+    ))}
+  </select>
+
+  <input
+    type="date"
+    className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+    value={fmt(selectedDate)}
+    onChange={(e) => setSelectedDate(stripTime(new Date(e.target.value)))}
+    title="날짜 선택"
+  />
+
+  <span className="text-[11px] text-gray-300">
+    {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+  </span>
+
+  {fmt(selectedDate) !== fmt(today) && (
+    <button
+      className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
+      onClick={() => setSelectedDate(stripTime(new Date()))}
+      title="오늘로"
+    >
+      오늘로
+    </button>
+  )}
+
+  {routeTargetName && (
+    <button
+      className="px-2 py-1 rounded-xl bg-orange-700 hover:bg-gray-600 text-xs"
+      onClick={() => setRouteTargetName("")}
+      title="내 이름으로 보기"
+    >
+      내이름
+    </button>
+  )}
+</div>
+
                 </div>
 
                 {/* 대상 이름 변경(임시) */}
@@ -1969,7 +2534,14 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="p-3 rounded-xl bg-gray-900/60 text-sm mt-3">
+                <div
+  className="p-3 rounded-xl bg-gray-900/60 text-sm mt-3"
+  ref={swipeRouteP0.ref}
+  onTouchStart={swipeRouteP0.onStart}
+  onTouchMove={swipeRouteP0.onMove}
+  onTouchEnd={swipeRouteP0.onEnd(goPrevDay, goNextDay)}
+  style={swipeRouteP0.style}
+>
                   {(() => {
                     const targetName = routeTargetName || myName;
                     const row = rowAtDateForName(targetName, selectedDate);
@@ -2036,46 +2608,146 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Panel 1: 해당일 전체 교번 */}
-              <div
-                ref={routePanelRefs[1]}
-                className="bg-gray-800 rounded-2xl p-3 shadow mb-16"
-                style={{ minHeight: slideViewportH }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-semibold flex items-center gap-2">
-                    <List className="w-5 h-5" /> 전체 교번
-                    <span className="text-sm text-gray-300 ml-1">
-                      {fmtWithWeekday(selectedDate)}
-                    </span>
-                  </h3>
+{/* Panel 1: 해당일 전체 교번 */}
+<div
+  ref={routePanelRefs[1]}
+  className="bg-gray-800 rounded-2xl p-3 shadow mb-16"
+  style={{ minHeight: slideViewportH }}
+>
+  {/* 1줄: 제목 + 날짜/요일/오늘로 */}
+  <div className="flex items-center justify-between mb-2" data-no-gesture>
+    <h3 className="text-lg font-semibold flex items-center gap-2">
+      <List className="w-5 h-5" /> 전체 교번
+    </h3>
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-                      value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
-                    />
-                  </div>
-                </div>
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* 날짜 선택 */}
+      <input
+        type="date"
+        className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+        value={fmt(selectedDate)}
+        onChange={(e) =>
+          setSelectedDate(stripTime(new Date(e.target.value)))
+        }
+        title="날짜 선택"
+      />
+      {/* 요일 배지 */}
+      <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
+        {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+      </span>
+      {/* 오늘로 (오늘이 아닐 때만) */}
+      {fmt(selectedDate) !== fmt(today) && (
+        <button
+          className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
+          onClick={() => setSelectedDate(stripTime(new Date()))}
+          title="오늘로"
+        >
+          오늘로
+        </button>
+      )}
+    </div>
+  </div>
 
-                <RosterGrid
-                  rows={rosterAt(selectedDate)}
-                  holidaySet={holidaySet}
-                  date={selectedDate}
-                  nightDiaThreshold={nightDiaThreshold}
-                  highlightMap={highlightMap}
-                  onPick={(name) => {
-                    setRouteTargetName(name);
-                    triggerRouteTransition();
-                  }}
-                />
-              </div>
+  {/* 2줄: 소속 + 보기 전환 */}
+  <div
+    className="flex items-center justify-between mb-2 gap-2 flex-wrap"
+    data-no-gesture
+  >
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-300">소속</span>
+      <select
+        className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+        value={selectedDepot}
+        onChange={(e) => setSelectedDepot(e.target.value)}
+        title="소속 선택"
+      >
+        {DEPOTS.map((d) => (
+          <option key={d} value={d}>{d}</option>
+        ))}
+      </select>
+    </div>
+
+    <button
+      className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
+      onClick={() => setOrderMode((m) => (m === "person" ? "dia" : "person"))}
+      aria-pressed={orderMode === "dia"}
+      title={orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+    >
+      {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+    </button>
+  </div>
+
+  {orderMode === "person" && (
+    <RosterGrid
+      rows={rosterAt(selectedDate)}
+      holidaySet={holidaySet}
+      date={selectedDate}
+      nightDiaThreshold={nightDiaThreshold}
+      highlightMap={highlightMap}
+      onPick={(name) => {
+        setRouteTargetName(name);
+        triggerRouteTransition();
+      }}
+      daySwipe={{
+        ref: swipeRouteP1.ref,
+        onStart: swipeRouteP1.onStart,
+        onMove: swipeRouteP1.onMove,
+        onEnd: swipeRouteP1.onEnd(goPrevDay, goNextDay),
+        style: swipeRouteP1.style,
+      }}
+    />
+  )}
+
+  {orderMode === "dia" && (
+    <RosterGrid
+      rows={diaGridRows}
+      holidaySet={holidaySet}
+      date={selectedDate}
+      nightDiaThreshold={nightDiaThreshold}
+      highlightMap={highlightMap}
+      onPick={(name) => {
+        setRouteTargetName(name);
+        triggerRouteTransition();
+      }}
+      daySwipe={{
+        ref: swipeRouteP1.ref,
+        onStart: swipeRouteP1.onStart,
+        onMove: swipeRouteP1.onMove,
+        onEnd: swipeRouteP1.onEnd(goPrevDay, goNextDay),
+        style: swipeRouteP1.style,
+      }}
+    />
+  )}
+</div>
+
             </div>
           </div>
+        )}
+        {/* 비교(다중 사용자 동시 보기) */}
+        {selectedTab === "compare" && (
+          <CompareWeeklyBoard
+            {...{
+              selectedDepot,
+              //setSelectedDepot,
+              selectedDate,
+              setSelectedDate,
+              nameList,
+              myName,
+              holidaySet,
+              nightDiaThreshold,
+              monthGridMonday,
+              //rowAtDateForName,
+              computeInOut,
+              compareSelected, // 이미 선택해둔 사람들 사용
+              setCompareSelected, // ⬅ 추가
+              slideViewportH,
+              // 테이블/앵커/강조색 모두 전달
+              tablesByDepot,
+              anchorDateByDepot, // ✅ 이걸 넘깁니다
+              highlightMap,
+              // ✨ 추가
+            }}
+          />
         )}
 
         {/* 설정 */}
@@ -2088,8 +2760,11 @@ export default function App() {
                 myName,
                 setMyNameForDepot,
                 nameList,
-                anchorDateStr,
-                setAnchorDateStr,
+                // ✅ 선택된 소속의 기준일만 보여주고/수정
+                anchorDateStr: anchorDateByDepot[selectedDepot] ?? fmt(today),
+                setAnchorDateStr: (v) =>
+                  setAnchorDateStrForDepot(selectedDepot, v),
+
                 holidaysText,
                 setHolidaysText,
                 newHolidayDate,
@@ -2105,6 +2780,7 @@ export default function App() {
                 DEPOTS,
                 DEFAULT_HOLIDAYS_25_26,
                 onUpload, // 파일 업로드 핸들러도 그대로 넘김
+                buildGyodaeTable, // ← 추가
               }}
             />
           </React.Suspense>
@@ -2143,6 +2819,8 @@ export default function App() {
                 전체
               </button>
 
+
+
               {/* 행로 */}
               <button
                 onClick={() => {
@@ -2158,7 +2836,17 @@ export default function App() {
                 <User className="w-5 h-5 mb-0.5" />
                 행로
               </button>
+              {/* 비교 */}
 
+              <button
+                onClick={() => setSelectedTab("compare")}
+                className={`flex flex-col items-center ${
+                  selectedTab === "compare" ? "text-blue-400" : "text-gray-300"
+                }`}
+              >
+                <Users className="w-5 h-5 mb-0.5" />
+                그룹
+              </button>
               {/* 설정 */}
               <button
                 onClick={() => setSelectedTab("settings")}
@@ -2239,13 +2927,21 @@ function RosterGrid({
   nightDiaThreshold,
   highlightMap,
   onPick,
+    daySwipe, // ⬅︎ 추가
 }) {
   const [selectedName, setSelectedName] = React.useState(null);
 
   return (
-    <div
+        <div
       className="grid gap-1"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))" }}
+      style={{
+        gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
+        ...(daySwipe?.style || {}), // ⬅︎ 추가
+      }}
+      ref={daySwipe?.ref}                 // ⬅︎ 추가
+      onTouchStart={daySwipe?.onStart}    // ⬅︎ 추가
+      onTouchMove={daySwipe?.onMove}      // ⬅︎ 추가
+      onTouchEnd={daySwipe?.onEnd}        // ⬅︎ 추가
     >
       {rows.map(({ name, row }) => {
         const t = computeInOut(row, date, holidaySet, nightDiaThreshold);
@@ -2326,9 +3022,732 @@ function RosterGrid({
   );
 }
 
+function CompareWeeklyBoard({
+  // 전역/외부 값 (변경 없음)
+  selectedDepot, // 기본 소속(초기값용)
+  selectedDate,
+  setSelectedDate,
+  nameList, // 현재 소속 이름 목록 (기존 그대로 넘어옴)
+  myName,
+  holidaySet,
+  nightDiaThreshold,
+  monthGridMonday,
+  computeInOut,
+  highlightMap,
+
+  // ✨ 추가로 넘어오는 값 2개 (App에서 아래에 안내)
+  tablesByDepot, // {안심: tsv, ...} 모든 소속의 표 텍스트
+  anchorDateByDepot, // ✅ 여기
+
+  // 선택 인원 상태
+  compareSelected,
+  setCompareSelected,
+
+  slideViewportH,
+}) {
+  /* ----------------------------
+   * 0) 유틸: 소속별 파싱/인덱싱
+   * ---------------------------- */
+  const parsedByDepot = React.useMemo(() => {
+    const map = {};
+    for (const depot of DEPOTS) {
+      const text = tablesByDepot?.[depot] || "";
+      const rows = parsePeopleTable(text);
+      const nameMap = buildNameIndexMap(rows);
+      map[depot] = {
+        rows,
+        nameMap,
+        names: rows.map((r) => r.name).filter(Boolean),
+      };
+    }
+    return map;
+  }, [tablesByDepot]);
+
+  // 회전 규칙 기반: (name, depot, date) → row
+  const rowAtDateFor = React.useCallback(
+    (name, depot, date) => {
+      const pack = parsedByDepot[depot];
+      if (!pack) return undefined;
+      const { rows, nameMap } = pack;
+      if (!nameMap.has(name) || rows.length === 0) return undefined;
+
+      const baseIdx = nameMap.get(name);
+
+      // ✅ 소속별 기준일
+      const anchorStr = anchorDateByDepot?.[depot];
+      const anchor = anchorStr
+        ? stripTime(new Date(anchorStr))
+        : stripTime(new Date());
+      const dd = Math.floor((stripTime(date) - anchor) / 86400000);
+
+      const idx = (((baseIdx + dd) % rows.length) + rows.length) % rows.length;
+      return rows[idx];
+    },
+    [parsedByDepot, anchorDateByDepot]
+  );
+
+  /* -------------------------------------
+   * 1) 선택 인원 {name, depot} 형태로 정규화
+   *    - 비어있으면 무조건 [내이름@현재소속]
+   *    - 구버전(문자열 배열) 호환
+   * ------------------------------------- */
+  const normalized = React.useMemo(() => {
+    if (!Array.isArray(compareSelected) || compareSelected.length === 0) {
+      return myName ? [{ name: myName, depot: selectedDepot }] : [];
+    }
+    return compareSelected.map((x) =>
+      typeof x === "string" ? { name: x, depot: selectedDepot } : x
+    );
+  }, [compareSelected, myName, selectedDepot]);
+
+  const people = normalized.length
+    ? normalized
+    : myName
+    ? [{ name: myName, depot: selectedDepot }]
+    : [];
+
+  // “모두 해제” → 내이름만 남기기
+  const resetToMine = React.useCallback(() => {
+    if (!myName) return;
+    setCompareSelected([{ name: myName, depot: selectedDepot }]);
+  }, [myName, selectedDepot, setCompareSelected]);
+
+  // 개별 추가/삭제
+  const addPerson = (name, depot) => {
+    setCompareSelected((prev) => {
+      const base = (Array.isArray(prev) && prev.length ? prev : people).map(
+        (x) => (typeof x === "string" ? { name: x, depot: selectedDepot } : x)
+      );
+      if (base.some((p) => p.name === name && p.depot === depot)) return base;
+      return [...base, { name, depot }];
+    });
+  };
+  const removePerson = (name, depot) => {
+    setCompareSelected((prev) => {
+      const base = (Array.isArray(prev) ? prev : people).map((x) =>
+        typeof x === "string" ? { name: x, depot: selectedDepot } : x
+      );
+      const next = base.filter((p) => !(p.name === name && p.depot === depot));
+      // 최소 1명은 내이름 유지
+      if (next.length === 0 && myName)
+        return [{ name: myName, depot: selectedDepot }];
+      return next;
+    });
+  };
+
+  /* --------------------------------
+   * 2) 월→주(6주)로 쪼개기 + 헤더
+   * -------------------------------- */
+  const weeks = React.useMemo(() => {
+    const days = monthGridMonday(selectedDate);
+    const arr = [];
+    for (let i = 0; i < days.length; i += 7) arr.push(days.slice(i, i + 7));
+    return arr;
+  }, [selectedDate]);
+
+  // 헤더 높이 + “맨위로” 플래그
+  const headerRef = React.useRef(null);
+  const [headerH, setHeaderH] = React.useState(0);
+  const forceTopRef = React.useRef(false);
+
+  React.useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const measure = () => setHeaderH(el.offsetHeight || 0);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      try {
+        ro.disconnect();
+      } catch {}
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  // 선택 주 페이지 동기화
+  const weekIndexOfSelected = React.useMemo(() => {
+    const sel = fmt(selectedDate);
+    const idx = weeks.findIndex((w) => w.some((d) => fmt(d) === sel));
+    return idx < 0 ? 0 : idx;
+  }, [weeks, selectedDate]);
+
+  const [weekPage, setWeekPage] = React.useState(weekIndexOfSelected);
+  React.useEffect(() => {
+    if (forceTopRef.current) {
+      forceTopRef.current = false;
+      return;
+    }
+    setWeekPage(weekIndexOfSelected);
+  }, [weekIndexOfSelected]);
+
+  // 제스처(월 좌우 / 주 상하)
+  const wrapRef = React.useRef(null);
+  const [dragX, setDragX] = React.useState(0);
+  const [dragY, setDragY] = React.useState(0);
+  const [snapping, setSnapping] = React.useState(false);
+  const gRef = React.useRef({ sx: 0, sy: 0, lock: null, lx: 0, ly: 0, t: 0 });
+  const X_DIST = 40,
+    Y_DIST = 40,
+    VEL = 0.35,
+    SNAP_MS = 300;
+
+  // 수직 페이저(행 영역) 높이 = 화면 - 헤더
+  const contentH = Math.max(160, slideViewportH - headerH - 8);
+
+  const onTouchStart = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
+    const t = e.touches[0];
+    gRef.current = {
+      sx: t.clientX,
+      sy: t.clientY,
+      lock: null,
+      lx: t.clientX,
+      ly: t.clientY,
+      t: performance.now(),
+    };
+    setSnapping(false);
+    setDragX(0);
+    setDragY(0);
+  };
+  const onTouchMove = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
+    const t = e.touches[0];
+    const dx = t.clientX - gRef.current.sx;
+    const dy = t.clientY - gRef.current.sy;
+    if (gRef.current.lock === null) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8)
+        gRef.current.lock = "h";
+      else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8)
+        gRef.current.lock = "v";
+    }
+    if (gRef.current.lock === "h") {
+      e.preventDefault();
+      setDragX(dx);
+    } else if (gRef.current.lock === "v") {
+      e.preventDefault();
+      setDragY(dy);
+    }
+    gRef.current.lx = t.clientX;
+    gRef.current.ly = t.clientY;
+    gRef.current.t = performance.now();
+  };
+  const onTouchEnd = (e) => {
+    if (e.target.closest("[data-no-gesture]")) return;
+    const t = e.changedTouches[0];
+    const now = performance.now();
+    const dt = Math.max(1, now - gRef.current.t);
+    const vx = (t.clientX - gRef.current.lx) / dt;
+    const vy = (t.clientY - gRef.current.ly) / dt;
+
+    if (gRef.current.lock === "h") {
+      const goNext = dragX < -X_DIST || vx < -VEL;
+      const goPrev = dragX > X_DIST || vx > VEL;
+      setSnapping(true);
+      if (goNext) {
+        setDragX(-(wrapRef.current?.offsetWidth || 320));
+        setTimeout(() => {
+          forceTopRef.current = true;
+          setWeekPage(0);
+          setDragY(0);
+          setSelectedDate(addMonthsSafe(selectedDate, 1));
+          setDragX(0);
+          setSnapping(false);
+        }, SNAP_MS);
+      } else if (goPrev) {
+        setDragX(wrapRef.current?.offsetWidth || 320);
+        setTimeout(() => {
+          forceTopRef.current = true;
+          setWeekPage(0);
+          setDragY(0);
+          setSelectedDate(addMonthsSafe(selectedDate, -1));
+          setDragX(0);
+          setSnapping(false);
+        }, SNAP_MS);
+      } else {
+        setDragX(0);
+        setTimeout(() => setSnapping(false), SNAP_MS);
+      }
+    } else if (gRef.current.lock === "v") {
+      const goNext = dragY < -Y_DIST || vy < -VEL;
+      const goPrev = dragY > Y_DIST || vy > VEL;
+      setSnapping(true);
+      if (goNext && weekPage < weeks.length - 1) {
+        setDragY(-contentH);
+        setTimeout(() => {
+          setWeekPage((p) => p + 1);
+          setDragY(0);
+          setSnapping(false);
+        }, SNAP_MS);
+      } else if (goPrev && weekPage > 0) {
+        setDragY(contentH);
+        setTimeout(() => {
+          setWeekPage((p) => p - 1);
+          setDragY(0);
+          setSnapping(false);
+        }, SNAP_MS);
+      } else {
+        setDragY(0);
+        setTimeout(() => setSnapping(false), SNAP_MS);
+      }
+    } else {
+      setDragX(0);
+      setDragY(0);
+    }
+  };
+
+  /* --------------------------------
+   * 3) 사람 선택(다른 소속에서 불러오기)
+   *    - 이 셀렉트는 “추가용” 로컬 상태
+   * -------------------------------- */
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [filterText, setFilterText] = React.useState("");
+  const [pickerDepot, setPickerDepot] = React.useState(selectedDepot); // ← 전역 영향 없음
+
+  const selectableNames = React.useMemo(() => {
+    const src = parsedByDepot[pickerDepot]?.names ?? [];
+    const pickedKey = new Set(people.map((p) => `${p.depot}::${p.name}`));
+    const list = src.filter(
+      (n) =>
+        !pickedKey.has(`${pickerDepot}::${n}`) &&
+        (filterText.trim()
+          ? n.toLowerCase().includes(filterText.trim().toLowerCase())
+          : true)
+    );
+    return list;
+  }, [parsedByDepot, pickerDepot, people, filterText]);
+
+  // 표시 폭
+  const NAME_COL_W = 80;
+  const monthIdx = selectedDate.getMonth();
+  const displayedWeekDays = weeks[weekPage] || [];
+
+  // 오늘 ISO (로컬 기준)
+const todayISO = fmt(stripTime(new Date()));
+// 현재 화면에 보이는 주(7일)가 오늘을 포함하는지
+const isCurrentWeekHasToday = React.useMemo(
+  () => displayedWeekDays.some((d) => fmt(d) === todayISO),
+  [displayedWeekDays, todayISO]
+);
+
+
+  // 헤더 월 라벨
+  const monthLabel = `${selectedDate.getFullYear()}.${String(
+    selectedDate.getMonth() + 1
+  ).padStart(2, "0")}`;
+
+  // ✅ 컴포넌트 상단(반환문 위)에 유틸 하나 추가
+  function getContrastText(bg) {
+    if (!bg) return "#fff";
+    const c = bg.replace("#", "");
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq >= 150 ? "#000" : "#fff";
+  }
+  // s1 ~ s6 표기면 주간으로 간주
+  function isSCodeDay(v) {
+    return typeof v === "string" && /^s\s*[1-6]$/i.test(v.trim());
+  }
+
+  // "HH:MM"에서 시만 뽑기 (형식 아니면 null)
+  function hourFromStr(v) {
+    if (typeof v !== "string") return null;
+    const m = v.match(/^(\d{1,2})\s*:/);
+    return m ? Number(m[1]) : null;
+  }
+  // ✅ 오늘(로컬)로 주/드래그 상태까지 한 번에 복귀
+const goToday = React.useCallback(() => {
+  const now = stripTime(new Date()); // 오늘 00:00
+
+  // '오늘' 달 기준으로 주 인덱스 계산
+  const days = monthGridMonday(now);
+  const wks = [];
+  for (let i = 0; i < days.length; i += 7) wks.push(days.slice(i, i + 7));
+  const idx = wks.findIndex((w) => w.some((d) => fmt(d) === fmt(now)));
+
+  // 상태 동기화
+  setSelectedDate(now);
+  setWeekPage(idx < 0 ? 0 : idx);
+  setDragX(0);
+  setDragY(0);
+  setSnapping(false);
+  forceTopRef.current = false;
+}, [monthGridMonday, setSelectedDate]);
+
+
+  return (
+    <div
+      ref={wrapRef}
+      className="bg-gray-800 rounded-2xl p-3 shadow mt-4 select-none overflow-hidden"
+      style={{ height: slideViewportH, touchAction: "manipulation" }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      {/* 상단바: 이전/다음 제거, 소속은 추가용 로컬 */}
+      {/* 상단바 (탭/버튼 영역) */}
+      <div
+        className="flex items-center justify-between gap-2 flex-wrap"
+        data-no-gesture
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        style={{
+          touchAction: "auto", // ← 터치 제스처 허용
+          position: "relative",
+          zIndex: 3, // ← 컨텐츠 위로
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-300">추가</label>
+          <select
+            className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+            value={pickerDepot}
+            onChange={(e) => setPickerDepot(e.target.value)}
+            title="사람 추가용 소속 선택 (화면 내용에는 영향 없음)"
+          >
+            {DEPOTS.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <input
+  type="month"
+  className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+  value={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}`}
+  onChange={(e) => {
+    const v = e.target.value; // "YYYY-MM"
+    if (!v) return;
+    const [y, m] = v.split("-").map(Number);
+    const next = new Date(selectedDate);
+    next.setFullYear(y);
+    next.setMonth(m - 1, 1); // 1일로 고정해서 overflow 방지
+    setSelectedDate(stripTime(next));
+  }}
+  title="월 선택"
+/>
+
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            className="ml-2 px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs"
+            onClick={() => setPickerOpen((v) => !v)}
+          >
+            {pickerOpen ? "추가 닫기" : "사람 추가"}
+          </button>
+          <button
+            className="px-2 py-1 rounded-xl bg-gray-700 text-xs"
+            onClick={resetToMine}
+            title="내 이름만 남기기"
+          >
+            모두 해제
+          </button>
+          {(fmt(selectedDate) !== todayISO || !isCurrentWeekHasToday) && (
+            <button
+  className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500"
+  onClick={goToday}
+  title="오늘로"
+>
+  오늘로
+</button>
+
+)}
+
+
+        </div>
+      </div>
+
+      {/* 추가 패널 */}
+      {pickerOpen && (
+        <div
+          className="mt-2 p-2 rounded-xl bg-gray-900 shadow-lg border border-gray-700"
+          data-no-gesture
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          style={{ position: "relative", zIndex: 3, touchAction: "auto" }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              className="flex-1 bg-gray-700 rounded-xl px-2 py-1 text-sm"
+              placeholder="이름 검색…"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+            />
+            <span className="text-xs text-gray-400">({pickerDepot})</span>
+          </div>
+          <div
+            className="grid gap-1"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))",
+            }}
+          >
+            {selectableNames.map((n) => {
+              const bg = highlightMap?.[n] || "#374151"; // 강조색 없으면 기본 회색
+              const fg = getContrastText(bg);
+              return (
+                <button
+                  key={`${pickerDepot}::${n}`}
+                  onClick={() => addPerson(n, pickerDepot)}
+                  className="px-1.5 py-0.5 rounded-md text-[11px] font-semibold truncate transition-opacity"
+                  title={`${pickerDepot} • ${n} 추가`}
+                  style={{
+                    backgroundColor: bg,
+                    color: fg,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    opacity: 0.95,
+                  }}
+                  onPointerDown={(e) => (e.currentTarget.style.opacity = "1")}
+                  onPointerUp={(e) => (e.currentTarget.style.opacity = "0.95")}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* === 고정 헤더(그룹 + 날짜 7칸) === */}
+      <div
+        ref={headerRef}
+        className="mt-2"
+        style={{ position: "relative", zIndex: 2 }} // ← 컨텐츠보다 위
+      >
+        <div
+          className="grid rounded-t-xl overflow-hidden"
+          style={{
+            gridTemplateColumns: `${NAME_COL_W}px repeat(7, minmax(0,1fr))`,
+            pointerEvents: "none", // ← 헤더는 터치 방해 안 함
+          }}
+        >
+          <div className="bg-white-1000 px-1 py-4 text-[17px] font-semibold border-r border-gray-700">
+            <span className="opacity">{monthLabel}</span>
+          </div>
+          {displayedWeekDays.map((d) => {
+            const dow = d.getDay();
+            const iso = fmt(d);
+            const outside = d.getMonth() !== monthIdx;
+            const color =
+              dow === 0
+                ? "text-red-400"
+                : dow === 6
+                ? "text-blue-400"
+                : "text-gray-100";
+            return (
+              <div
+                key={iso}
+                className={
+                  "px-2 py-2 text-center text-sm font-semibold border-l border-gray-700 " +
+                  (outside ? "text-gray-500" : color)
+                }
+                title={fmtWithWeekday(d)}
+              >
+                <div>{d.getDate()}</div>
+                <div className="text-[11px] opacity-80">
+                  {["일", "월", "화", "수", "목", "금", "토"][dow]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 수직 페이저(행 영역만 이동) */}
+      <div
+        className="relative"
+        style={{
+          height: contentH,
+          transform: `translateY(${
+            -weekPage * contentH + dragY
+          }px) translateX(${dragX}px)`,
+          transition: snapping ? "transform 300ms ease-out" : "none",
+          willChange: "transform",
+          zIndex: 1, // ← 헤더/컨트롤보다 뒤
+        }}
+      >
+        {weeks.map((weekDays, wi) => (
+          <div key={"w" + wi} className="pb-4" style={{ minHeight: contentH }}>
+            <div className="divide-y divide-gray-700 rounded-b-xl overflow-hidden">
+              {people.map(({ name, depot }) => (
+                <div
+                  key={`${depot}::${name}`}
+                  className="grid bg-gray-800/60 hover:bg-gray-800"
+                  style={{
+                    gridTemplateColumns: `${NAME_COL_W}px repeat(7, minmax(0,1fr))`,
+                  }}
+                >
+                  {/* 이름(해제) */}
+                  <div className="px-2 py-1 border-r border-gray-700 flex items-center justify-between min-w-0">
+                    <div
+                      className="text-white font-semibold truncate text-[12px] min-w-0"
+                      title={`${depot} • ${name}`}
+                    >
+                      {name}
+                      {/*{" "}*/}
+                      {/*  
+    <span className="text-[5px] text-gray-300">
+      ({depot})
+    </span> 
+    */}
+                    </div>
+                    <button
+                      className="w-4 h-4 rounded-full bg-gray-700 hover:bg-gray-600 text-[10px] flex items-center justify-center flex-shrink-0 ml-0.5"
+                      onClick={() => removePerson(name, depot)}
+                      title={`${name} 해제`}
+                    >
+                      −
+                    </button>
+                  </div>
+
+                  {/* 7일 셀 */}
+                  {weekDays.map((d) => {
+                    const row = rowAtDateFor(name, depot, d);
+                    const t = computeInOut(
+                      row,
+                      d,
+                      holidaySet,
+                      nightDiaThreshold
+                    );
+                    const dia =
+                      row?.dia === undefined
+                        ? "-"
+                        : typeof row.dia === "number"
+                        ? row.dia
+                        : String(row.dia).replace(/\s+/g, "");
+                    const outside = d.getMonth() !== monthIdx;
+
+                    // ==== 근무 상태 색상 판별 ====
+                    let bgColor = "bg-gray-800/60";
+                    const inStr = t.in || "";
+                    const outStr = t.out || "";
+
+                    // 1) s1~s6 이면 무조건 주간
+                    if (isSCodeDay(inStr) || isSCodeDay(outStr)) {
+                      bgColor = "bg-yellow-500/30";
+                    } else {
+                      // 2) 시간 규칙 적용
+                      const hIn = hourFromStr(inStr);
+                      const hOut = hourFromStr(outStr);
+                      if (hIn != null && hOut != null) {
+                        if (hIn >= 5 && hIn <= 17) {
+                          bgColor = "bg-yellow-500/30"; // 주간
+                        } else if (hIn >= 17 || hOut <= 5) {
+                          bgColor = "bg-sky-500/30"; // 야간
+                        }
+                      }
+                    }
+
+                    return (
+                      <div
+                        key={`${depot}::${name}_${fmt(d)}`}
+                        className={`px-1 py-1 text-[12px] leading-tight border-l border-gray-700 ${bgColor} ${
+                          outside ? "opacity-50" : ""
+                        }`}
+                        title={`${depot} • ${name} • ${fmtWithWeekday(
+                          d
+                        )} • DIA ${dia} / ${t.in}~${t.out}`}
+                      >
+                        <div className="font-semibold">{dia}</div>
+                        <div className="mt-0.5">{t.in || "-"}</div>
+                        <div>{t.out || "-"}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-1 text-[10px] text-gray-400 text-center">
+        ← 오른쪽: 다음달 / 왼쪽: 전달 · 위/아래: 주 변경
+      </div>
+    </div>
+  );
+}
+
+function DiaOrderSections({ diaViewData, nightDiaThreshold }) {
+  return (
+    <div className="space-y-4">
+      {/* 1) DIA 1 ~ 끝 */}
+      <section>
+        <h3 className="text-sm font-semibold opacity-80 mb-2">DIA 1 ~ 끝</h3>
+        <ul className="grid grid-cols-1 gap-2">
+          {diaViewData.work.map((e) => (
+            <li
+              key={`work-${e.name}`}
+              className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2"
+            >
+              <span className="font-medium">{e.name}</span>
+              <span className="text-cyan-400 font-semibold">
+                {e.diaNum} DIA
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* 2) 비번: 전날 야간이면 '25~' 또는 '대5~'로 표기 */}
+      <section>
+        <h3 className="text-sm font-semibold opacity-80 mb-2">비번</h3>
+        <ul className="grid grid-cols-1 gap-2">
+          {diaViewData.biban.map((e) => {
+            const tag = prevNightTag(
+              e.yDiaNum,
+              e.yPrevLabel,
+              nightDiaThreshold
+            );
+            const isPrevNight = tag !== "비번";
+
+            return (
+              <li
+                key={`biban-${e.name}`}
+                className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2"
+              >
+                <span className="font-medium">{e.name}</span>
+                <span
+                  className={`font-semibold ${
+                    isPrevNight ? "text-sky-400" : "text-amber-400"
+                  }`}
+                >
+                  {tag}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      {/* 3) 휴무 */}
+      <section>
+        <h3 className="text-sm font-semibold opacity-80 mb-2">휴무</h3>
+        <ul className="grid grid-cols-1 gap-2">
+          {diaViewData.holiday.map((e) => (
+            <li
+              key={`holiday-${e.name}`}
+              className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2"
+            >
+              <span className="font-medium">{e.name}</span>
+              <span className="text-rose-400 font-semibold">휴</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 function FixedTabbarPortal({ children }) {
   const mountRef = React.useRef(null);
 
+  // SSR 안전: document 있는 환경에서만 미리 엘리먼트 생성
   if (!mountRef.current && typeof document !== "undefined") {
     mountRef.current = document.createElement("div");
   }
@@ -2337,13 +3756,14 @@ function FixedTabbarPortal({ children }) {
     const el = mountRef.current;
     if (!el) return;
 
+    // 포털 컨테이너 스타일
     el.style.position = "fixed";
     el.style.left = "0";
     el.style.right = "0";
     el.style.bottom = "0";
     el.style.zIndex = "9999";
     el.style.width = "100%";
-    el.style.pointerEvents = "none";
+    el.style.pointerEvents = "none"; // 부모는 히트테스트 안 함(아래에서 자식에 auto 부여)
     el.style.transform = "translateY(0)";
     el.style.willChange = "transform";
     document.body.appendChild(el);
@@ -2361,41 +3781,50 @@ function FixedTabbarPortal({ children }) {
 
     const sync = () => {
       if (!vv) return;
-
-      const layoutH = window.innerHeight;
-      const visibleH = vv.height + vv.offsetTop;
+      const layoutH = window.innerHeight; // 레이아웃 높이
+      const visibleH = vv.height + vv.offsetTop; // 실가시 영역
       const deficit = Math.max(0, layoutH - visibleH);
 
-      // 키보드로 볼만한 '큰' 감소 + 실제 입력 포커스가 있을 때만 보정
-      // (툴바 접힘/펼침은 100~200px 사이에서 흔들려도 보정 X)
-      const BIG_DEFICIT = 260; // 기기별로 230~300 사이가 무난
+      // 키보드가 확실히 올라온 상황에서만 보정
+      const BIG_DEFICIT = 260;
       const looksLikeKeyboard = isEditableFocused() && deficit >= BIG_DEFICIT;
 
       el.style.transform = looksLikeKeyboard
         ? `translateY(${-deficit}px)`
-        : "translateY(0px)"; // 0px 고정으로 안전 여백 유지
-      el.style.bottom = "0px"; // ✅ 강제 하단 정렬
+        : "translateY(0)";
+      el.style.bottom = "0px";
     };
 
-    const opts = { passive: true };
-    vv?.addEventListener("resize", sync, opts);
-    vv?.addEventListener("scroll", sync, opts);
-    window.addEventListener("focusin", sync, opts);
-    window.addEventListener("focusout", sync, opts);
-    window.addEventListener("orientationchange", sync, opts);
-
+    // 초기 동기화
     sync();
 
+    // 리스너 등록
+    const onResize = () => sync();
+    const onScroll = () => sync();
+    const onFocusIn = () => sync();
+    const onFocusOut = () => setTimeout(sync, 0);
+
+    vv?.addEventListener("resize", onResize, { passive: true });
+    vv?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize, { passive: true });
+    window.addEventListener("orientationchange", onResize, { passive: true });
+    window.addEventListener("focusin", onFocusIn);
+    window.addEventListener("focusout", onFocusOut);
+
     return () => {
-      vv?.removeEventListener("resize", sync);
-      vv?.removeEventListener("scroll", sync);
-      window.removeEventListener("focusin", sync);
-      window.removeEventListener("focusout", sync);
-      window.removeEventListener("orientationchange", sync);
-      if (el.parentNode) el.parentNode.removeChild(el);
+      vv?.removeEventListener("resize", onResize);
+      vv?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      window.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener("focusout", onFocusOut);
+      try {
+        el.remove();
+      } catch {}
     };
   }, []);
 
+  // 부모는 pointer-events:none이므로, 자식 래퍼에 auto를 줘서 네비가 클릭 가능하게 함
   return mountRef.current
     ? createPortal(
         <div style={{ pointerEvents: "auto" }}>{children}</div>,

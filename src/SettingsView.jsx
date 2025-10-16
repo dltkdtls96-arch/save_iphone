@@ -38,6 +38,7 @@ export default function SettingsView(props) {
     DEFAULT_HOLIDAYS_25_26,
 
     onUpload,
+    buildGyodaeTable, // ← 추가
   } = props;
 
   const palette = [
@@ -125,12 +126,20 @@ export default function SettingsView(props) {
             <div className="mt-5 px-3 py-4 w-full box-border rounded-2xl bg-gray-900/60 shadow-inner border border-gray-700/40">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-gray-200">
-                  기준일
+                  {selectedDepot ? `${selectedDepot} 기준일` : "기준일"}
                   <span className="ml-2 text-xs text-gray-400">
-                    (안심은 2025-10-01로 설정)
+                    {anchorDateStr ? `현재: ${anchorDateStr}` : "(미설정)"}
                   </span>
                 </label>
+
+                {/* ✅ 안심 선택 시 안내 문구 */}
+                {selectedDepot === "안심" && (
+                  <span className="text-xs text-amber-300">
+                    안심은 10월 1일로 하세요
+                  </span>
+                )}
               </div>
+
               <div className="relative rounded-xl overflow-hidden bg-gray-700 focus-within:ring-2 focus-within:ring-cyan-500">
                 <input
                   type="date"
@@ -139,6 +148,7 @@ export default function SettingsView(props) {
                   onChange={(e) => setAnchorDateStr(e.target.value)}
                 />
               </div>
+
               <p className="text-xs text-gray-400 mt-3 leading-relaxed">
                 기준일을 바꾸면 회전 기준이 변경됩니다.
                 <br />
@@ -346,6 +356,24 @@ export default function SettingsView(props) {
               />
             </label>
           </div>
+          {selectedDepot === "교대" && buildGyodaeTable && (
+            <div className="mb-2">
+              <button
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white"
+                onClick={() => {
+                  setTablesByDepot((prev) => ({
+                    ...(prev || {}),
+                    [selectedDepot]: buildGyodaeTable(),
+                  }));
+                  // 필요하면 기준일도 고정:
+                  // setAnchorDateStr("2025-10-01");
+                }}
+              >
+                교대 21일 순환표로 채우기
+              </button>
+            </div>
+          )}
+
           <div className="text-xs text-gray-400 mb-1">
             헤더 예시:
             순번,이름,dia,평일출근,평일퇴근,토요일출근,토요일퇴근,휴일출근,휴일퇴근
