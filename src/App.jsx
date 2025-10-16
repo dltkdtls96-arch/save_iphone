@@ -152,8 +152,10 @@ function buildGyodaeTable() {
   const header =
     "순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근";
 
-  const DAY_IN = "09:00", DAY_OUT = "18:00";
-  const NIGHT_IN = "18:00", NIGHT_OUT = "09:00";
+  const DAY_IN = "09:00",
+    DAY_OUT = "18:00";
+  const NIGHT_IN = "18:00",
+    NIGHT_OUT = "09:00";
 
   const rows = [];
   for (let i = 1; i <= 21; i++) {
@@ -168,7 +170,12 @@ function buildGyodaeTable() {
     if (i === 15) name = "병반"; // ✅ 병반은 15행
 
     // 시간: 주/야만 채움, 휴는 공란
-    let wdIn = "", wdOut = "", saIn = "", saOut = "", hoIn = "", hoOut = "";
+    let wdIn = "",
+      wdOut = "",
+      saIn = "",
+      saOut = "",
+      hoIn = "",
+      hoOut = "";
     if (dia === "주") {
       wdIn = saIn = hoIn = DAY_IN;
       wdOut = saOut = hoOut = DAY_OUT;
@@ -182,7 +189,6 @@ function buildGyodaeTable() {
 
   return [header, ...rows].join("\n");
 }
-
 
 const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근
 1\t신동훈\t4\t6:43\t15:23\t6:55\t16:37\ts4\ts4
@@ -587,11 +593,11 @@ function useDaySwipeHandlers() {
   const stateRef = React.useRef({ x: 0, y: 0, lock: null });
   const lastRef = React.useRef({ x: 0, t: 0 });
 
-   const TH = 40;       // 스냅 거리 임계
-   const VEL = 0.35;    // 스냅 속도 임계(px/ms)
-   const ACT = 14;      // 방향 잠금 시작(살짝 올림)
-   const DIR = 1.25;    // 방향 우세 비율(가로가 세로보다 1.25배 이상 커야 가로로 잠금)
-  const SNAP = 280;   // 애니 시간(ms)
+  const TH = 40; // 스냅 거리 임계
+  const VEL = 0.35; // 스냅 속도 임계(px/ms)
+  const ACT = 14; // 방향 잠금 시작(살짝 올림)
+  const DIR = 1.25; // 방향 우세 비율(가로가 세로보다 1.25배 이상 커야 가로로 잠금)
+  const SNAP = 280; // 애니 시간(ms)
 
   const onStart = (e) => {
     if (e.target.closest("[data-no-gesture]")) return;
@@ -601,7 +607,7 @@ function useDaySwipeHandlers() {
     setSnapping(false);
     setDragX(0);
     //e.stopPropagation?.();
-   // ❌ 여기서 stopPropagation 하지 말 것!
+    // ❌ 여기서 stopPropagation 하지 말 것!
   };
 
   const onMove = (e) => {
@@ -611,22 +617,23 @@ function useDaySwipeHandlers() {
     const dy = t.clientY - stateRef.current.y;
 
     if (stateRef.current.lock === null) {
-           if (Math.abs(dx) > Math.abs(dy) * DIR && Math.abs(dx) > ACT) {
+      if (Math.abs(dx) > Math.abs(dy) * DIR && Math.abs(dx) > ACT) {
         stateRef.current.lock = "h";
-             } else if (Math.abs(dy) > Math.abs(dx) * DIR && Math.abs(dy) > ACT) {
+      } else if (Math.abs(dy) > Math.abs(dx) * DIR && Math.abs(dy) > ACT) {
         stateRef.current.lock = "v";
       }
     }
     if (stateRef.current.lock === "h") {
-           if (e.cancelable) e.preventDefault();
-           e.stopPropagation?.();  
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation?.();
       setDragX(dx);
       lastRef.current = { x: t.clientX, t: performance.now() };
     }
   };
 
   const onEnd = (onPrev, onNext) => (e) => {
-      if (stateRef.current.lock !== "h") { // 가로로 잠금 안 됐으면 아무 것도 안 함(세로에 맡김)
+    if (stateRef.current.lock !== "h") {
+      // 가로로 잠금 안 됐으면 아무 것도 안 함(세로에 맡김)
       setDragX(0);
       return;
     }
@@ -672,7 +679,6 @@ function useDaySwipeHandlers() {
 }
 // ⬆⬆ 여기까지
 
-
 /* ===========================================
  * App
  * ===========================================*/
@@ -686,8 +692,8 @@ export default function App() {
   const today = stripTime(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   // ⬇︎ 추가: 좌우 스와이프 시 하루 전/후 이동
-const goPrevDay = () => setSelectedDate((d) => addDaysSafe(d, -1));
-const goNextDay = () => setSelectedDate((d) => addDaysSafe(d,  1));
+  const goPrevDay = () => setSelectedDate((d) => addDaysSafe(d, -1));
+  const goNextDay = () => setSelectedDate((d) => addDaysSafe(d, 1));
 
   const [tempName, setTempName] = useState(""); // 홈 탭용 임시 이름
   // 👉 슬라이드 애니메이션을 위한 상태/참조
@@ -1046,12 +1052,12 @@ const goNextDay = () => setSelectedDate((d) => addDaysSafe(d,  1));
       }
     }
   }, [selectedTab]);
-// ✅ 비교 탭 들어올 때도 오늘로 고정
-useEffect(() => {
-  if (selectedTab === "compare") {
-    if (fmt(selectedDate) !== fmt(today)) setSelectedDate(today);
-  }
-}, [selectedTab]);
+  // ✅ 비교 탭 들어올 때도 오늘로 고정
+  useEffect(() => {
+    if (selectedTab === "compare") {
+      if (fmt(selectedDate) !== fmt(today)) setSelectedDate(today);
+    }
+  }, [selectedTab]);
 
   // ✅ 행로 탭으로 들어올 때는 항상 panel0로 강제 리셋
   useEffect(() => {
@@ -1476,8 +1482,8 @@ useEffect(() => {
   const V_SNAP_MS = 300;
   const V_DIST_RATIO = 0.1;
   const V_VELOCITY_THRESHOLD = 0.1;
-  const V_ACTIVATE = 12;   // 시작 임계 조금 올림
-  const V_DIR = 1.2;       // 세로 우세 비율
+  const V_ACTIVATE = 12; // 시작 임계 조금 올림
+  const V_DIR = 1.2; // 세로 우세 비율
 
   // iOS 스타일 러버밴드 (limit 바깥으로 당기면 저항)
   function rubberband(distance, limit) {
@@ -1585,7 +1591,10 @@ useEffect(() => {
         if (Math.abs(dy) > Math.abs(dx) * V_DIR && Math.abs(dy) > V_ACTIVATE) {
           swipeRef.current.lock = "v";
           lockBodyScroll();
-            } else if (Math.abs(dx) > Math.abs(dy) * V_DIR && Math.abs(dx) > V_ACTIVATE) {
+        } else if (
+          Math.abs(dx) > Math.abs(dy) * V_DIR &&
+          Math.abs(dx) > V_ACTIVATE
+        ) {
           swipeRef.current.lock = "h";
         }
       }
@@ -1724,10 +1733,10 @@ useEffect(() => {
   const vHome = makeVerticalHandlers("home");
   const vRoute = makeVerticalHandlers("route");
 
-  const swipeHomeP1 = useDaySwipeHandlers();   // 홈탭 panel1 (선택일 전체교번)
-const swipeRosterP0 = useDaySwipeHandlers(); // 전체탭 panel0
-const swipeRouteP0 = useDaySwipeHandlers();  // 행로탭 panel0
-const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
+  const swipeHomeP1 = useDaySwipeHandlers(); // 홈탭 panel1 (선택일 전체교번)
+  const swipeRosterP0 = useDaySwipeHandlers(); // 전체탭 panel0
+  const swipeRouteP0 = useDaySwipeHandlers(); // 행로탭 panel0
+  const swipeRouteP1 = useDaySwipeHandlers(); // 행로탭 panel1
 
   // 업로드 (표)
   async function onUpload(e) {
@@ -1816,7 +1825,7 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
             className="mt-4 select-none overflow-hidden rounded-2xl overscroll-contain"
             style={{
               height: slideViewportH,
-                  touchAction: isHomeCalLocked ? "none" : "pan-y",
+              touchAction: isHomeCalLocked ? "none" : "pan-y",
             }}
             onTouchStart={vHome.onStart}
             onTouchMove={vHome.onMove}
@@ -1864,48 +1873,46 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                 className="bg-gray-800 rounded-2xl p-3 shadow mb-7"
                 style={{ minHeight: slideViewportH }}
               >
-               
- {/* === 캘린더 카드 헤더 === */}
-<div className="flex items-center justify-between mb-0">
-  <h2 className="text-lg font-semibold flex items-center gap-2">
-    <CalendarIcon className="w-5 h-5" />
-    {selectedDate.getFullYear()}년 {selectedDate.getMonth() + 1}월
-  </h2>
+                {/* === 캘린더 카드 헤더 === */}
+                <div className="flex items-center justify-between mb-0">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <CalendarIcon className="w-5 h-5" />
+                    {selectedDate.getFullYear()}년 {selectedDate.getMonth() + 1}
+                    월
+                  </h2>
 
-  <div className="flex items-center gap-2">
-    {/* 연/월 선택 */}
-    <input
-      type="month"
-      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-      value={`${selectedDate.getFullYear()}-${String(
-        selectedDate.getMonth() + 1
-      ).padStart(2, "0")}`}
-      onChange={(e) => {
-        const [y, m] = e.target.value.split("-").map(Number);
-        const d = stripTime(new Date(y, (m || 1) - 1, 1));
-        setSelectedDate(d);
-        setCalHasSelection(false); // 월 넘기면 당일 하이라이트 해제
-      }}
-      title="연/월 선택"
-    />
+                  <div className="flex items-center gap-2">
+                    {/* 연/월 선택 */}
+                    <input
+                      type="month"
+                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+                      value={`${selectedDate.getFullYear()}-${String(
+                        selectedDate.getMonth() + 1
+                      ).padStart(2, "0")}`}
+                      onChange={(e) => {
+                        const [y, m] = e.target.value.split("-").map(Number);
+                        const d = stripTime(new Date(y, (m || 1) - 1, 1));
+                        setSelectedDate(d);
+                        setCalHasSelection(false); // 월 넘기면 당일 하이라이트 해제
+                      }}
+                      title="연/월 선택"
+                    />
 
-    {/* 오늘로 */}
-    {fmt(selectedDate) !== fmt(today) && (
-      <button
-        className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
-        onClick={() => {
-          setSelectedDate(today);
-          setCalHasSelection(true);
-          lastClickedRef.current = fmt(today);
-        }}
-      >
-        오늘로
-      </button>
-    )}
-  </div>
-</div>
-
-
+                    {/* 오늘로 */}
+                    {fmt(selectedDate) !== fmt(today) && (
+                      <button
+                        className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
+                        onClick={() => {
+                          setSelectedDate(today);
+                          setCalHasSelection(true);
+                          lastClickedRef.current = fmt(today);
+                        }}
+                      >
+                        오늘로
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 {/* 대상/소속 셀렉트 */}
                 <div className="flex items-center gap-3 mb-2 flex-wrap">
@@ -2065,30 +2072,41 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                             const isLastRowCompressed =
                               compressLastRow && rowIndex === 5;
 
-                               let diaColorClass = "";
-                               if (selectedDepot === "교대") {
-                                 const label = (typeof row?.dia === "string" ? row.dia : "").replace(/\s/g, "");
-                                 if (label === "주") diaColorClass = "text-yellow-300";
-                                 else if (label === "야") diaColorClass = "text-sky-300";
-                                 // "휴" 또는 그 외는 색 없음(기본)
-                               } else {
-                                 if (typeof row?.dia === "number") {
-                                   diaColorClass =
-                                     row.dia >= nightDiaThreshold ? "text-sky-300" : "text-yellow-300";
-                                 } else if (
-                                   typeof row?.dia === "string" &&
-                                   row.dia.replace(/\s/g, "").startsWith("대")
-                                 ) {
-                                   const nextDate = new Date(d);
-                                   nextDate.setDate(d.getDate() + 1);
-                                   const nextRow = rowAtDateForName(activeName, nextDate);
-                                   const nextDia = nextRow?.dia;
-                                   const nextIsBibeon =
-                                     typeof nextDia === "string" &&
-                                     nextDia.replace(/\s/g, "").includes("비번");
-                                   diaColorClass = nextIsBibeon ? "text-sky-300" : "text-yellow-300";
-                                 }
-                               }
+                            let diaColorClass = "";
+                            if (selectedDepot === "교대") {
+                              const label = (
+                                typeof row?.dia === "string" ? row.dia : ""
+                              ).replace(/\s/g, "");
+                              if (label === "주")
+                                diaColorClass = "text-yellow-300";
+                              else if (label === "야")
+                                diaColorClass = "text-sky-300";
+                              // "휴" 또는 그 외는 색 없음(기본)
+                            } else {
+                              if (typeof row?.dia === "number") {
+                                diaColorClass =
+                                  row.dia >= nightDiaThreshold
+                                    ? "text-sky-300"
+                                    : "text-yellow-300";
+                              } else if (
+                                typeof row?.dia === "string" &&
+                                row.dia.replace(/\s/g, "").startsWith("대")
+                              ) {
+                                const nextDate = new Date(d);
+                                nextDate.setDate(d.getDate() + 1);
+                                const nextRow = rowAtDateForName(
+                                  activeName,
+                                  nextDate
+                                );
+                                const nextDia = nextRow?.dia;
+                                const nextIsBibeon =
+                                  typeof nextDia === "string" &&
+                                  nextDia.replace(/\s/g, "").includes("비번");
+                                diaColorClass = nextIsBibeon
+                                  ? "text-sky-300"
+                                  : "text-yellow-300";
+                              }
+                            }
 
                             return (
                               <button
@@ -2176,13 +2194,13 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                                     <div className="truncate text-[clamp(9px,1vw,11px)] max-w-[50px]">
                                       {t.out}
                                     </div>
-                                     <div className="truncate text-[clamp(8px,1vw,11px)] max-w-[50px]">
-   {t.isNight && selectedDepot !== "교대" ? (
-     `${t.combo}`
-   ) : (
-     <span className="invisible">공백</span>
-   )}
- </div>
+                                    <div className="truncate text-[clamp(8px,1vw,11px)] max-w-[50px]">
+                                      {t.isNight && selectedDepot !== "교대" ? (
+                                        `${t.combo}`
+                                      ) : (
+                                        <span className="invisible">공백</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </button>
@@ -2195,215 +2213,236 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                 </div>
               </div>
 
-             {/* Panel 1: 선택일 전체 교번 */}
-<div
-  ref={homePanelRefs[1]}
-  className="bg-gray-800 rounded-2xl p-3 shadow"
-  style={{ minHeight: slideViewportH }}
->
-  {/* 1줄: 제목 + 날짜/요일/오늘로 */}
-  <div className="flex items-center justify-between mb-2" data-no-gesture>
-    <h3 className="text-lg font-semibold flex items-center gap-2">
-      <List className="w-5 h-5" /> 전체 교번
-    </h3>
+              {/* Panel 1: 선택일 전체 교번 */}
+              <div
+                ref={homePanelRefs[1]}
+                className="bg-gray-800 rounded-2xl p-3 shadow"
+                style={{ minHeight: slideViewportH }}
+              >
+                {/* 1줄: 제목 + 날짜/요일/오늘로 */}
+                <div
+                  className="flex items-center justify-between mb-2"
+                  data-no-gesture
+                >
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <List className="w-5 h-5" /> 전체 교번
+                  </h3>
 
-    <div className="flex items-center gap-2 flex-wrap">
-      <input
-        type="date"
-        className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-        value={fmt(selectedDate)}
-        onChange={(e) => setSelectedDate(stripTime(new Date(e.target.value)))}
-        title="날짜 선택"
-      />
-      <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
-        {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
-      </span>
-      {fmt(selectedDate) !== fmt(today) && (
-        <button
-          className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
-          onClick={() => setSelectedDate(stripTime(new Date()))}
-          title="오늘로"
-        >
-          오늘로
-        </button>
-      )}
-    </div>
-  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="date"
+                      className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+                      value={fmt(selectedDate)}
+                      onChange={(e) =>
+                        setSelectedDate(stripTime(new Date(e.target.value)))
+                      }
+                      title="날짜 선택"
+                    />
+                    <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
+                      {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+                    </span>
+                    {fmt(selectedDate) !== fmt(today) && (
+                      <button
+                        className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
+                        onClick={() => setSelectedDate(stripTime(new Date()))}
+                        title="오늘로"
+                      >
+                        오늘로
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-  {/* 2줄: 보기 전환 */}
-  <div className="flex justify-end mb-2" data-no-gesture>
-    <button
-      className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
-      onClick={() => setOrderMode((m) => (m === "person" ? "dia" : "person"))}
-      aria-pressed={orderMode === "dia"}
-      title={orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
-    >
-      {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
-    </button>
-  </div>
+                {/* 2줄: 보기 전환 */}
+                <div className="flex justify-end mb-2" data-no-gesture>
+                  <button
+                    className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
+                    onClick={() =>
+                      setOrderMode((m) => (m === "person" ? "dia" : "person"))
+                    }
+                    aria-pressed={orderMode === "dia"}
+                    title={
+                      orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"
+                    }
+                  >
+                    {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+                  </button>
+                </div>
 
-  {orderMode === "person" && (
-    <RosterGrid
-      rows={rosterAt(selectedDate)}
-      holidaySet={holidaySet}
-      date={selectedDate}
-      nightDiaThreshold={nightDiaThreshold}
-      highlightMap={highlightMap}
-      onPick={(name) => {
-        setRouteTargetName(name);
-        if (window.triggerRouteTransition) window.triggerRouteTransition();
-        else setSelectedTab("route");
-      }}
-      daySwipe={{
-        ref: swipeHomeP1.ref,
-        onStart: swipeHomeP1.onStart,
-        onMove: swipeHomeP1.onMove,
-        onEnd: swipeHomeP1.onEnd(goPrevDay, goNextDay),
-        style: swipeHomeP1.style,
-      }}
-    />
-  )}
+                {orderMode === "person" && (
+                  <RosterGrid
+                    rows={rosterAt(selectedDate)}
+                    holidaySet={holidaySet}
+                    date={selectedDate}
+                    nightDiaThreshold={nightDiaThreshold}
+                    highlightMap={highlightMap}
+                    onPick={(name) => {
+                      setRouteTargetName(name);
+                      if (window.triggerRouteTransition)
+                        window.triggerRouteTransition();
+                      else setSelectedTab("route");
+                    }}
+                    daySwipe={{
+                      ref: swipeHomeP1.ref,
+                      onStart: swipeHomeP1.onStart,
+                      onMove: swipeHomeP1.onMove,
+                      onEnd: swipeHomeP1.onEnd(goPrevDay, goNextDay),
+                      style: swipeHomeP1.style,
+                    }}
+                  />
+                )}
 
-  {orderMode === "dia" && (
-    <RosterGrid
-      rows={diaGridRows}
-      holidaySet={holidaySet}
-      date={selectedDate}
-      nightDiaThreshold={nightDiaThreshold}
-      highlightMap={highlightMap}
-      onPick={(name) => {
-        setRouteTargetName(name);
-        if (window.triggerRouteTransition) window.triggerRouteTransition();
-        else setSelectedTab("route");
-      }}
-      daySwipe={{
-        ref: swipeHomeP1.ref,
-        onStart: swipeHomeP1.onStart,
-        onMove: swipeHomeP1.onMove,
-        onEnd: swipeHomeP1.onEnd(goPrevDay, goNextDay),
-        style: swipeHomeP1.style,
-      }}
-    />
-  )}
-</div>
-
+                {orderMode === "dia" && (
+                  <RosterGrid
+                    rows={diaGridRows}
+                    holidaySet={holidaySet}
+                    date={selectedDate}
+                    nightDiaThreshold={nightDiaThreshold}
+                    highlightMap={highlightMap}
+                    onPick={(name) => {
+                      setRouteTargetName(name);
+                      if (window.triggerRouteTransition)
+                        window.triggerRouteTransition();
+                      else setSelectedTab("route");
+                    }}
+                    daySwipe={{
+                      ref: swipeHomeP1.ref,
+                      onStart: swipeHomeP1.onStart,
+                      onMove: swipeHomeP1.onMove,
+                      onEnd: swipeHomeP1.onEnd(goPrevDay, goNextDay),
+                      style: swipeHomeP1.style,
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}
 
-{/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
-{/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
-{selectedTab === "roster" && (
-  <div
-    className="bg-gray-800 rounded-2xl p-3 shadow mt-4"
-    style={{ minHeight: slideViewportH }}
-  >
-    {/* 1줄: 제목 + 날짜/요일/오늘로 */}
-    <div className="flex items-center justify-between mb-2" data-no-gesture>
-      <h2 className="text-lg font-semibold flex items-center gap-2">
-      <List className="w-5 h-5" /> 전체 교번 
-      </h2>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* 날짜 선택 */}
-        <input
-          type="date"
-          className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-          value={fmt(selectedDate)}
-          onChange={(e) => setSelectedDate(stripTime(new Date(e.target.value)))}
-          title="날짜 선택"
-        />
-        {/* 요일 배지 */}
-        <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
-          {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
-        </span>
-        {/* 오늘로 (오늘이 아닐 때만) */}
-        {fmt(selectedDate) !== fmt(today) && (
-          <button
-            className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
-            onClick={() => setSelectedDate(stripTime(new Date()))}
-            title="오늘로"
+        {/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
+        {/* 전체 다이아 (독립 탭) — 초소형 정사각 그리드 */}
+        {selectedTab === "roster" && (
+          <div
+            className="bg-gray-800 rounded-2xl p-3 shadow mt-4"
+            style={{ minHeight: slideViewportH }}
           >
-            오늘로
-          </button>
+            {/* 1줄: 제목 + 날짜/요일/오늘로 */}
+            <div
+              className="flex items-center justify-between mb-2"
+              data-no-gesture
+            >
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <List className="w-5 h-5" /> 전체 교번
+              </h2>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 날짜 선택 */}
+                <input
+                  type="date"
+                  className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+                  value={fmt(selectedDate)}
+                  onChange={(e) =>
+                    setSelectedDate(stripTime(new Date(e.target.value)))
+                  }
+                  title="날짜 선택"
+                />
+                {/* 요일 배지 */}
+                <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
+                  {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+                </span>
+                {/* 오늘로 (오늘이 아닐 때만) */}
+                {fmt(selectedDate) !== fmt(today) && (
+                  <button
+                    className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
+                    onClick={() => setSelectedDate(stripTime(new Date()))}
+                    title="오늘로"
+                  >
+                    오늘로
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 2줄: 소속 + 보기 전환 */}
+            <div
+              className="flex items-center justify-between mb-2 gap-2 flex-wrap"
+              data-no-gesture
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-300">소속</span>
+                <select
+                  className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+                  value={selectedDepot}
+                  onChange={(e) => setSelectedDepot(e.target.value)}
+                  title="소속 선택"
+                >
+                  {DEPOTS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
+                onClick={() =>
+                  setOrderMode((m) => (m === "person" ? "dia" : "person"))
+                }
+                aria-pressed={orderMode === "dia"}
+                title={
+                  orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"
+                }
+              >
+                {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+              </button>
+            </div>
+
+            {orderMode === "person" && (
+              <RosterGrid
+                rows={rosterAt(selectedDate)}
+                holidaySet={holidaySet}
+                date={selectedDate}
+                nightDiaThreshold={nightDiaThreshold}
+                highlightMap={highlightMap}
+                onPick={(name) => {
+                  setRouteTargetName(name);
+                  triggerRouteTransition();
+                }}
+                daySwipe={{
+                  ref: swipeRosterP0.ref,
+                  onStart: swipeRosterP0.onStart,
+                  onMove: swipeRosterP0.onMove,
+                  onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+                  style: swipeRosterP0.style,
+                }}
+              />
+            )}
+
+            {orderMode === "dia" && (
+              <RosterGrid
+                rows={diaGridRows}
+                holidaySet={holidaySet}
+                date={selectedDate}
+                nightDiaThreshold={nightDiaThreshold}
+                highlightMap={highlightMap}
+                onPick={(name) => {
+                  setRouteTargetName(name);
+                  if (window.triggerRouteTransition)
+                    window.triggerRouteTransition();
+                  else setSelectedTab("route");
+                }}
+                daySwipe={{
+                  ref: swipeRosterP0.ref,
+                  onStart: swipeRosterP0.onStart,
+                  onMove: swipeRosterP0.onMove,
+                  onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+                  style: swipeRosterP0.style,
+                }}
+              />
+            )}
+          </div>
         )}
-      </div>
-    </div>
-
-    {/* 2줄: 소속 + 보기 전환 */}
-    <div
-      className="flex items-center justify-between mb-2 gap-2 flex-wrap"
-      data-no-gesture
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-300">소속</span>
-        <select
-          className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-          value={selectedDepot}
-          onChange={(e) => setSelectedDepot(e.target.value)}
-          title="소속 선택"
-        >
-          {DEPOTS.map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-      </div>
-
-      <button
-        className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
-        onClick={() => setOrderMode((m) => (m === "person" ? "dia" : "person"))}
-        aria-pressed={orderMode === "dia"}
-        title={orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
-      >
-        {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
-      </button>
-    </div>
-
-    {orderMode === "person" && (
-      <RosterGrid
-        rows={rosterAt(selectedDate)}
-        holidaySet={holidaySet}
-        date={selectedDate}
-        nightDiaThreshold={nightDiaThreshold}
-        highlightMap={highlightMap}
-        onPick={(name) => {
-          setRouteTargetName(name);
-          triggerRouteTransition();
-        }}
-        daySwipe={{
-          ref: swipeRosterP0.ref,
-          onStart: swipeRosterP0.onStart,
-          onMove: swipeRosterP0.onMove,
-          onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
-          style: swipeRosterP0.style,
-        }}
-      />
-    )}
-
-    {orderMode === "dia" && (
-      <RosterGrid
-        rows={diaGridRows}
-        holidaySet={holidaySet}
-        date={selectedDate}
-        nightDiaThreshold={nightDiaThreshold}
-        highlightMap={highlightMap}
-        onPick={(name) => {
-          setRouteTargetName(name);
-          if (window.triggerRouteTransition) window.triggerRouteTransition();
-          else setSelectedTab("route");
-        }}
-        daySwipe={{
-          ref: swipeRosterP0.ref,
-          onStart: swipeRosterP0.onStart,
-          onMove: swipeRosterP0.onMove,
-          onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
-          style: swipeRosterP0.style,
-        }}
-      />
-    )}
-  </div>
-)}
-
 
         {/* 행로표 */}
         {selectedTab === "route" && (
@@ -2412,7 +2451,7 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
             className="mt-4 select-none overflow-hidden rounded-2xl overscroll-contain"
             style={{
               height: slideViewportH,
-                  touchAction: isRouteLocked ? "none" : "pan-y",
+              touchAction: isRouteLocked ? "none" : "pan-y",
             }}
             onTouchStart={vRoute.onStart}
             onTouchMove={vRoute.onMove}
@@ -2467,49 +2506,52 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                     {routeTargetName || myName})
                   </h2>
                   <div className="flex gap-2 items-center">
-  <select
-    className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-    value={selectedDepot}
-    onChange={(e) => setSelectedDepot(e.target.value)}
-  >
-    {DEPOTS.map((d) => (
-      <option key={d} value={d}>{d}</option>
-    ))}
-  </select>
+                    <select
+                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+                      value={selectedDepot}
+                      onChange={(e) => setSelectedDepot(e.target.value)}
+                    >
+                      {DEPOTS.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
 
-  <input
-    type="date"
-    className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-    value={fmt(selectedDate)}
-    onChange={(e) => setSelectedDate(stripTime(new Date(e.target.value)))}
-    title="날짜 선택"
-  />
+                    <input
+                      type="date"
+                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+                      value={fmt(selectedDate)}
+                      onChange={(e) =>
+                        setSelectedDate(stripTime(new Date(e.target.value)))
+                      }
+                      title="날짜 선택"
+                    />
 
-  <span className="text-[11px] text-gray-300">
-    {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
-  </span>
+                    <span className="text-[11px] text-gray-300">
+                      {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+                    </span>
 
-  {fmt(selectedDate) !== fmt(today) && (
-    <button
-      className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
-      onClick={() => setSelectedDate(stripTime(new Date()))}
-      title="오늘로"
-    >
-      오늘로
-    </button>
-  )}
+                    {fmt(selectedDate) !== fmt(today) && (
+                      <button
+                        className="px-2 py-1 rounded-xl bg-indigo-500 text-white text-xs"
+                        onClick={() => setSelectedDate(stripTime(new Date()))}
+                        title="오늘로"
+                      >
+                        오늘로
+                      </button>
+                    )}
 
-  {routeTargetName && (
-    <button
-      className="px-2 py-1 rounded-xl bg-orange-700 hover:bg-gray-600 text-xs"
-      onClick={() => setRouteTargetName("")}
-      title="내 이름으로 보기"
-    >
-      내이름
-    </button>
-  )}
-</div>
-
+                    {routeTargetName && (
+                      <button
+                        className="px-2 py-1 rounded-xl bg-orange-700 hover:bg-gray-600 text-xs"
+                        onClick={() => setRouteTargetName("")}
+                        title="내 이름으로 보기"
+                      >
+                        내이름
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* 대상 이름 변경(임시) */}
@@ -2535,13 +2577,13 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                 </div>
 
                 <div
-  className="p-3 rounded-xl bg-gray-900/60 text-sm mt-3"
-  ref={swipeRouteP0.ref}
-  onTouchStart={swipeRouteP0.onStart}
-  onTouchMove={swipeRouteP0.onMove}
-  onTouchEnd={swipeRouteP0.onEnd(goPrevDay, goNextDay)}
-  style={swipeRouteP0.style}
->
+                  className="p-3 rounded-xl bg-gray-900/60 text-sm mt-3"
+                  ref={swipeRouteP0.ref}
+                  onTouchStart={swipeRouteP0.onStart}
+                  onTouchMove={swipeRouteP0.onMove}
+                  onTouchEnd={swipeRouteP0.onEnd(goPrevDay, goNextDay)}
+                  style={swipeRouteP0.style}
+                >
                   {(() => {
                     const targetName = routeTargetName || myName;
                     const row = rowAtDateForName(targetName, selectedDate);
@@ -2608,118 +2650,126 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                 </div>
               </div>
 
-{/* Panel 1: 해당일 전체 교번 */}
-<div
-  ref={routePanelRefs[1]}
-  className="bg-gray-800 rounded-2xl p-3 shadow mb-16"
-  style={{ minHeight: slideViewportH }}
->
-  {/* 1줄: 제목 + 날짜/요일/오늘로 */}
-  <div className="flex items-center justify-between mb-2" data-no-gesture>
-    <h3 className="text-lg font-semibold flex items-center gap-2">
-      <List className="w-5 h-5" /> 전체 교번
-    </h3>
+              {/* Panel 1: 해당일 전체 교번 */}
+              <div
+                ref={routePanelRefs[1]}
+                className="bg-gray-800 rounded-2xl p-3 shadow mb-16"
+                style={{ minHeight: slideViewportH }}
+              >
+                {/* 1줄: 제목 + 날짜/요일/오늘로 */}
+                <div
+                  className="flex items-center justify-between mb-2"
+                  data-no-gesture
+                >
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <List className="w-5 h-5" /> 전체 교번
+                  </h3>
 
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* 날짜 선택 */}
-      <input
-        type="date"
-        className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-        value={fmt(selectedDate)}
-        onChange={(e) =>
-          setSelectedDate(stripTime(new Date(e.target.value)))
-        }
-        title="날짜 선택"
-      />
-      {/* 요일 배지 */}
-      <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
-        {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
-      </span>
-      {/* 오늘로 (오늘이 아닐 때만) */}
-      {fmt(selectedDate) !== fmt(today) && (
-        <button
-          className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
-          onClick={() => setSelectedDate(stripTime(new Date()))}
-          title="오늘로"
-        >
-          오늘로
-        </button>
-      )}
-    </div>
-  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* 날짜 선택 */}
+                    <input
+                      type="date"
+                      className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+                      value={fmt(selectedDate)}
+                      onChange={(e) =>
+                        setSelectedDate(stripTime(new Date(e.target.value)))
+                      }
+                      title="날짜 선택"
+                    />
+                    {/* 요일 배지 */}
+                    <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
+                      {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
+                    </span>
+                    {/* 오늘로 (오늘이 아닐 때만) */}
+                    {fmt(selectedDate) !== fmt(today) && (
+                      <button
+                        className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500 active:scale-[.98] transition"
+                        onClick={() => setSelectedDate(stripTime(new Date()))}
+                        title="오늘로"
+                      >
+                        오늘로
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-  {/* 2줄: 소속 + 보기 전환 */}
-  <div
-    className="flex items-center justify-between mb-2 gap-2 flex-wrap"
-    data-no-gesture
-  >
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-300">소속</span>
-      <select
-        className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
-        value={selectedDepot}
-        onChange={(e) => setSelectedDepot(e.target.value)}
-        title="소속 선택"
-      >
-        {DEPOTS.map((d) => (
-          <option key={d} value={d}>{d}</option>
-        ))}
-      </select>
-    </div>
+                {/* 2줄: 소속 + 보기 전환 */}
+                <div
+                  className="flex items-center justify-between mb-2 gap-2 flex-wrap"
+                  data-no-gesture
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-300">소속</span>
+                    <select
+                      className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
+                      value={selectedDepot}
+                      onChange={(e) => setSelectedDepot(e.target.value)}
+                      title="소속 선택"
+                    >
+                      {DEPOTS.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-    <button
-      className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
-      onClick={() => setOrderMode((m) => (m === "person" ? "dia" : "person"))}
-      aria-pressed={orderMode === "dia"}
-      title={orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
-    >
-      {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
-    </button>
-  </div>
+                  <button
+                    className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
+                    onClick={() =>
+                      setOrderMode((m) => (m === "person" ? "dia" : "person"))
+                    }
+                    aria-pressed={orderMode === "dia"}
+                    title={
+                      orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"
+                    }
+                  >
+                    {orderMode === "dia" ? "순번으로 보기" : "DIA 순서로 보기"}
+                  </button>
+                </div>
 
-  {orderMode === "person" && (
-    <RosterGrid
-      rows={rosterAt(selectedDate)}
-      holidaySet={holidaySet}
-      date={selectedDate}
-      nightDiaThreshold={nightDiaThreshold}
-      highlightMap={highlightMap}
-      onPick={(name) => {
-        setRouteTargetName(name);
-        triggerRouteTransition();
-      }}
-      daySwipe={{
-        ref: swipeRouteP1.ref,
-        onStart: swipeRouteP1.onStart,
-        onMove: swipeRouteP1.onMove,
-        onEnd: swipeRouteP1.onEnd(goPrevDay, goNextDay),
-        style: swipeRouteP1.style,
-      }}
-    />
-  )}
+                {orderMode === "person" && (
+                  <RosterGrid
+                    rows={rosterAt(selectedDate)}
+                    holidaySet={holidaySet}
+                    date={selectedDate}
+                    nightDiaThreshold={nightDiaThreshold}
+                    highlightMap={highlightMap}
+                    onPick={(name) => {
+                      setRouteTargetName(name);
+                      triggerRouteTransition();
+                    }}
+                    daySwipe={{
+                      ref: swipeRouteP1.ref,
+                      onStart: swipeRouteP1.onStart,
+                      onMove: swipeRouteP1.onMove,
+                      onEnd: swipeRouteP1.onEnd(goPrevDay, goNextDay),
+                      style: swipeRouteP1.style,
+                    }}
+                  />
+                )}
 
-  {orderMode === "dia" && (
-    <RosterGrid
-      rows={diaGridRows}
-      holidaySet={holidaySet}
-      date={selectedDate}
-      nightDiaThreshold={nightDiaThreshold}
-      highlightMap={highlightMap}
-      onPick={(name) => {
-        setRouteTargetName(name);
-        triggerRouteTransition();
-      }}
-      daySwipe={{
-        ref: swipeRouteP1.ref,
-        onStart: swipeRouteP1.onStart,
-        onMove: swipeRouteP1.onMove,
-        onEnd: swipeRouteP1.onEnd(goPrevDay, goNextDay),
-        style: swipeRouteP1.style,
-      }}
-    />
-  )}
-</div>
-
+                {orderMode === "dia" && (
+                  <RosterGrid
+                    rows={diaGridRows}
+                    holidaySet={holidaySet}
+                    date={selectedDate}
+                    nightDiaThreshold={nightDiaThreshold}
+                    highlightMap={highlightMap}
+                    onPick={(name) => {
+                      setRouteTargetName(name);
+                      triggerRouteTransition();
+                    }}
+                    daySwipe={{
+                      ref: swipeRouteP1.ref,
+                      onStart: swipeRouteP1.onStart,
+                      onMove: swipeRouteP1.onMove,
+                      onEnd: swipeRouteP1.onEnd(goPrevDay, goNextDay),
+                      style: swipeRouteP1.style,
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -2818,8 +2868,6 @@ const swipeRouteP1 = useDaySwipeHandlers();  // 행로탭 panel1
                 <List className="w-5 h-5 mb-0.5" />
                 전체
               </button>
-
-
 
               {/* 행로 */}
               <button
@@ -2927,21 +2975,21 @@ function RosterGrid({
   nightDiaThreshold,
   highlightMap,
   onPick,
-    daySwipe, // ⬅︎ 추가
+  daySwipe, // ⬅︎ 추가
 }) {
   const [selectedName, setSelectedName] = React.useState(null);
 
   return (
-        <div
+    <div
       className="grid gap-1"
       style={{
         gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
         ...(daySwipe?.style || {}), // ⬅︎ 추가
       }}
-      ref={daySwipe?.ref}                 // ⬅︎ 추가
-      onTouchStart={daySwipe?.onStart}    // ⬅︎ 추가
-      onTouchMove={daySwipe?.onMove}      // ⬅︎ 추가
-      onTouchEnd={daySwipe?.onEnd}        // ⬅︎ 추가
+      ref={daySwipe?.ref} // ⬅︎ 추가
+      onTouchStart={daySwipe?.onStart} // ⬅︎ 추가
+      onTouchMove={daySwipe?.onMove} // ⬅︎ 추가
+      onTouchEnd={daySwipe?.onEnd} // ⬅︎ 추가
     >
       {rows.map(({ name, row }) => {
         const t = computeInOut(row, date, holidaySet, nightDiaThreshold);
@@ -3088,8 +3136,6 @@ function CompareWeeklyBoard({
 
   /* -------------------------------------
    * 1) 선택 인원 {name, depot} 형태로 정규화
-   *    - 비어있으면 무조건 [내이름@현재소속]
-   *    - 구버전(문자열 배열) 호환
    * ------------------------------------- */
   const normalized = React.useMemo(() => {
     if (!Array.isArray(compareSelected) || compareSelected.length === 0) {
@@ -3128,7 +3174,6 @@ function CompareWeeklyBoard({
         typeof x === "string" ? { name: x, depot: selectedDepot } : x
       );
       const next = base.filter((p) => !(p.name === name && p.depot === depot));
-      // 최소 1명은 내이름 유지
       if (next.length === 0 && myName)
         return [{ name: myName, depot: selectedDepot }];
       return next;
@@ -3299,11 +3344,10 @@ function CompareWeeklyBoard({
 
   /* --------------------------------
    * 3) 사람 선택(다른 소속에서 불러오기)
-   *    - 이 셀렉트는 “추가용” 로컬 상태
    * -------------------------------- */
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [filterText, setFilterText] = React.useState("");
-  const [pickerDepot, setPickerDepot] = React.useState(selectedDepot); // ← 전역 영향 없음
+  const [pickerDepot, setPickerDepot] = React.useState(selectedDepot);
 
   const selectableNames = React.useMemo(() => {
     const src = parsedByDepot[pickerDepot]?.names ?? [];
@@ -3324,20 +3368,29 @@ function CompareWeeklyBoard({
   const displayedWeekDays = weeks[weekPage] || [];
 
   // 오늘 ISO (로컬 기준)
-const todayISO = fmt(stripTime(new Date()));
-// 현재 화면에 보이는 주(7일)가 오늘을 포함하는지
-const isCurrentWeekHasToday = React.useMemo(
-  () => displayedWeekDays.some((d) => fmt(d) === todayISO),
-  [displayedWeekDays, todayISO]
-);
+  const todayISO = fmt(stripTime(new Date()));
+  const isCurrentWeekHasToday = React.useMemo(
+    () => displayedWeekDays.some((d) => fmt(d) === todayISO),
+    [displayedWeekDays, todayISO]
+  );
 
+  const isTodayCell = React.useCallback(
+    (d) => isCurrentWeekHasToday && fmt(d) === todayISO,
+    [isCurrentWeekHasToday, todayISO]
+  );
+
+  // 🔴 오늘 컬럼 인덱스(헤더+바디 오버레이용)
+  const todayColIndex = React.useMemo(() => {
+    if (!isCurrentWeekHasToday) return -1;
+    return displayedWeekDays.findIndex((d) => fmt(d) === todayISO);
+  }, [isCurrentWeekHasToday, displayedWeekDays, todayISO]);
 
   // 헤더 월 라벨
   const monthLabel = `${selectedDate.getFullYear()}.${String(
     selectedDate.getMonth() + 1
   ).padStart(2, "0")}`;
 
-  // ✅ 컴포넌트 상단(반환문 위)에 유틸 하나 추가
+  // ✅ 유틸
   function getContrastText(bg) {
     if (!bg) return "#fff";
     const c = bg.replace("#", "");
@@ -3347,36 +3400,46 @@ const isCurrentWeekHasToday = React.useMemo(
     const yiq = (r * 299 + g * 587 + b * 114) / 1000;
     return yiq >= 150 ? "#000" : "#fff";
   }
-  // s1 ~ s6 표기면 주간으로 간주
   function isSCodeDay(v) {
     return typeof v === "string" && /^s\s*[1-6]$/i.test(v.trim());
   }
-
-  // "HH:MM"에서 시만 뽑기 (형식 아니면 null)
   function hourFromStr(v) {
     if (typeof v !== "string") return null;
     const m = v.match(/^(\d{1,2})\s*:/);
     return m ? Number(m[1]) : null;
   }
-  // ✅ 오늘(로컬)로 주/드래그 상태까지 한 번에 복귀
-const goToday = React.useCallback(() => {
-  const now = stripTime(new Date()); // 오늘 00:00
+  const goToday = React.useCallback(() => {
+    const now = stripTime(new Date());
+    const days = monthGridMonday(now);
+    const wks = [];
+    for (let i = 0; i < days.length; i += 7) wks.push(days.slice(i, i + 7));
+    const idx = wks.findIndex((w) => w.some((d) => fmt(d) === fmt(now)));
+    setSelectedDate(now);
+    setWeekPage(idx < 0 ? 0 : idx);
+    setDragX(0);
+    setDragY(0);
+    setSnapping(false);
+    forceTopRef.current = false;
+  }, [monthGridMonday, setSelectedDate]);
 
-  // '오늘' 달 기준으로 주 인덱스 계산
-  const days = monthGridMonday(now);
-  const wks = [];
-  for (let i = 0; i < days.length; i += 7) wks.push(days.slice(i, i + 7));
-  const idx = wks.findIndex((w) => w.some((d) => fmt(d) === fmt(now)));
-
-  // 상태 동기화
-  setSelectedDate(now);
-  setWeekPage(idx < 0 ? 0 : idx);
-  setDragX(0);
-  setDragY(0);
-  setSnapping(false);
-  forceTopRef.current = false;
-}, [monthGridMonday, setSelectedDate]);
-
+  /* ===== 현재 주(page) 실제 컨텐츠 높이 측정 ===== */
+  const weekBodyRefs = React.useRef([]);
+  const [bodyH, setBodyH] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const el = weekBodyRefs.current[weekPage];
+    if (!el) return;
+    const measure = () => setBodyH(el.offsetHeight || 0);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      try {
+        ro.disconnect();
+      } catch {}
+      window.removeEventListener("resize", measure);
+    };
+  }, [weekPage, people.length, weeks.length]);
 
   return (
     <div
@@ -3387,8 +3450,7 @@ const goToday = React.useCallback(() => {
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* 상단바: 이전/다음 제거, 소속은 추가용 로컬 */}
-      {/* 상단바 (탭/버튼 영역) */}
+      {/* 상단바 */}
       <div
         className="flex items-center justify-between gap-2 flex-wrap"
         data-no-gesture
@@ -3396,9 +3458,9 @@ const goToday = React.useCallback(() => {
         onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
         style={{
-          touchAction: "auto", // ← 터치 제스처 허용
+          touchAction: "auto",
           position: "relative",
-          zIndex: 3, // ← 컨텐츠 위로
+          zIndex: 3,
         }}
       >
         <div className="flex items-center gap-2">
@@ -3416,21 +3478,22 @@ const goToday = React.useCallback(() => {
             ))}
           </select>
           <input
-  type="month"
-  className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
-  value={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}`}
-  onChange={(e) => {
-    const v = e.target.value; // "YYYY-MM"
-    if (!v) return;
-    const [y, m] = v.split("-").map(Number);
-    const next = new Date(selectedDate);
-    next.setFullYear(y);
-    next.setMonth(m - 1, 1); // 1일로 고정해서 overflow 방지
-    setSelectedDate(stripTime(next));
-  }}
-  title="월 선택"
-/>
-
+            type="month"
+            className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
+            value={`${selectedDate.getFullYear()}-${String(
+              selectedDate.getMonth() + 1
+            ).padStart(2, "0")}`}
+            onChange={(e) => {
+              const v = e.target.value; // "YYYY-MM"
+              if (!v) return;
+              const [y, m] = v.split("-").map(Number);
+              const next = new Date(selectedDate);
+              next.setFullYear(y);
+              next.setMonth(m - 1, 1);
+              setSelectedDate(stripTime(next));
+            }}
+            title="월 선택"
+          />
         </div>
 
         <div className="flex items-center gap-1">
@@ -3449,221 +3512,179 @@ const goToday = React.useCallback(() => {
           </button>
           {(fmt(selectedDate) !== todayISO || !isCurrentWeekHasToday) && (
             <button
-  className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500"
-  onClick={goToday}
-  title="오늘로"
->
-  오늘로
-</button>
-
-)}
-
-
+              className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500"
+              onClick={goToday}
+              title="오늘로"
+            >
+              오늘로
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 추가 패널 */}
-      {pickerOpen && (
-        <div
-          className="mt-2 p-2 rounded-xl bg-gray-900 shadow-lg border border-gray-700"
-          data-no-gesture
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          style={{ position: "relative", zIndex: 3, touchAction: "auto" }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <input
-              className="flex-1 bg-gray-700 rounded-xl px-2 py-1 text-sm"
-              placeholder="이름 검색…"
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-            />
-            <span className="text-xs text-gray-400">({pickerDepot})</span>
-          </div>
+      {/* ===== 헤더 + 바디 래퍼 ===== */}
+      <div className="relative mt-2" style={{ zIndex: 1 }}>
+        {/* 🔴 오늘 컬럼 전체(헤더+바디) 테두리 오버레이 — 마지막 사람에서 정확히 끝남 */}
+        {todayColIndex >= 0 && (
           <div
-            className="grid gap-1"
+            className="absolute pointer-events-none border-2 border-red-400 rounded-md"
             style={{
-              gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))",
+              top: 0,
+              left: `calc(${NAME_COL_W}px + ${todayColIndex} * ((100% - ${NAME_COL_W}px) / 7))`,
+              width: `calc((100% - ${NAME_COL_W}px) / 7)`,
+              height: headerH + bodyH, // ✅ 실제 바디 높이만큼만
+              zIndex: 4,
+            }}
+          />
+        )}
+
+        {/* === 고정 헤더 === */}
+        <div ref={headerRef} style={{ position: "relative", zIndex: 2 }}>
+          <div
+            className="grid rounded-t-xl overflow-hidden"
+            style={{
+              gridTemplateColumns: `${NAME_COL_W}px repeat(7, minmax(0,1fr))`,
+              pointerEvents: "none",
             }}
           >
-            {selectableNames.map((n) => {
-              const bg = highlightMap?.[n] || "#374151"; // 강조색 없으면 기본 회색
-              const fg = getContrastText(bg);
+            <div className="bg-white-1000 px-1 py-4 text-[17px] font-semibold border-r border-gray-700">
+              <span className="opacity">{monthLabel}</span>
+            </div>
+            {displayedWeekDays.map((d) => {
+              const dow = d.getDay();
+              const iso = fmt(d);
+              const outside = d.getMonth() !== monthIdx;
+              const color =
+                dow === 0
+                  ? "text-red-400"
+                  : dow === 6
+                  ? "text-blue-400"
+                  : "text-gray-100";
               return (
-                <button
-                  key={`${pickerDepot}::${n}`}
-                  onClick={() => addPerson(n, pickerDepot)}
-                  className="px-1.5 py-0.5 rounded-md text-[11px] font-semibold truncate transition-opacity"
-                  title={`${pickerDepot} • ${n} 추가`}
-                  style={{
-                    backgroundColor: bg,
-                    color: fg,
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    opacity: 0.95,
-                  }}
-                  onPointerDown={(e) => (e.currentTarget.style.opacity = "1")}
-                  onPointerUp={(e) => (e.currentTarget.style.opacity = "0.95")}
+                <div
+                  key={iso}
+                  className={
+                    "px-2 py-2 text-center text-sm font-semibold border-l border-gray-700 " +
+                    (outside ? "text-gray-500" : color)
+                  }
+                  title={fmtWithWeekday(d)}
                 >
-                  {n}
-                </button>
+                  <div>{d.getDate()}</div>
+                  <div className="text-[11px] opacity-80">
+                    {["일", "월", "화", "수", "목", "금", "토"][dow]}
+                  </div>
+                </div>
               );
             })}
           </div>
         </div>
-      )}
 
-      {/* === 고정 헤더(그룹 + 날짜 7칸) === */}
-      <div
-        ref={headerRef}
-        className="mt-2"
-        style={{ position: "relative", zIndex: 2 }} // ← 컨텐츠보다 위
-      >
+        {/* 수직 페이저(행 영역만 이동) */}
         <div
-          className="grid rounded-t-xl overflow-hidden"
+          className="relative"
           style={{
-            gridTemplateColumns: `${NAME_COL_W}px repeat(7, minmax(0,1fr))`,
-            pointerEvents: "none", // ← 헤더는 터치 방해 안 함
+            height: contentH,
+            transform: `translateY(${
+              -weekPage * contentH + dragY
+            }px) translateX(${dragX}px)`,
+            transition: snapping ? "transform 300ms ease-out" : "none",
+            willChange: "transform",
+            zIndex: 1,
           }}
         >
-          <div className="bg-white-1000 px-1 py-4 text-[17px] font-semibold border-r border-gray-700">
-            <span className="opacity">{monthLabel}</span>
-          </div>
-          {displayedWeekDays.map((d) => {
-            const dow = d.getDay();
-            const iso = fmt(d);
-            const outside = d.getMonth() !== monthIdx;
-            const color =
-              dow === 0
-                ? "text-red-400"
-                : dow === 6
-                ? "text-blue-400"
-                : "text-gray-100";
-            return (
+          {weeks.map((weekDays, wi) => (
+            <div
+              key={"w" + wi}
+              className="pb-4"
+              style={{ minHeight: contentH }}
+            >
               <div
-                key={iso}
-                className={
-                  "px-2 py-2 text-center text-sm font-semibold border-l border-gray-700 " +
-                  (outside ? "text-gray-500" : color)
-                }
-                title={fmtWithWeekday(d)}
+                className="divide-y divide-gray-700 rounded-b-xl overflow-hidden"
+                ref={(el) => (weekBodyRefs.current[wi] = el)} // ✅ 각 주 컨텐츠 참조
               >
-                <div>{d.getDate()}</div>
-                <div className="text-[11px] opacity-80">
-                  {["일", "월", "화", "수", "목", "금", "토"][dow]}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 수직 페이저(행 영역만 이동) */}
-      <div
-        className="relative"
-        style={{
-          height: contentH,
-          transform: `translateY(${
-            -weekPage * contentH + dragY
-          }px) translateX(${dragX}px)`,
-          transition: snapping ? "transform 300ms ease-out" : "none",
-          willChange: "transform",
-          zIndex: 1, // ← 헤더/컨트롤보다 뒤
-        }}
-      >
-        {weeks.map((weekDays, wi) => (
-          <div key={"w" + wi} className="pb-4" style={{ minHeight: contentH }}>
-            <div className="divide-y divide-gray-700 rounded-b-xl overflow-hidden">
-              {people.map(({ name, depot }) => (
-                <div
-                  key={`${depot}::${name}`}
-                  className="grid bg-gray-800/60 hover:bg-gray-800"
-                  style={{
-                    gridTemplateColumns: `${NAME_COL_W}px repeat(7, minmax(0,1fr))`,
-                  }}
-                >
-                  {/* 이름(해제) */}
-                  <div className="px-2 py-1 border-r border-gray-700 flex items-center justify-between min-w-0">
-                    <div
-                      className="text-white font-semibold truncate text-[12px] min-w-0"
-                      title={`${depot} • ${name}`}
-                    >
-                      {name}
-                      {/*{" "}*/}
-                      {/*  
-    <span className="text-[5px] text-gray-300">
-      ({depot})
-    </span> 
-    */}
+                {people.map(({ name, depot }) => (
+                  <div
+                    key={`${depot}::${name}`}
+                    className="grid bg-gray-800/60 hover:bg-gray-800"
+                    style={{
+                      gridTemplateColumns: `${NAME_COL_W}px repeat(7, minmax(0,1fr))`,
+                    }}
+                  >
+                    {/* 이름(해제) */}
+                    <div className="px-2 py-1 border-r border-gray-700 flex items-center justify-between min-w-0">
+                      <div
+                        className="text-white font-semibold truncate text-[12px] min-w-0"
+                        title={`${depot} • ${name}`}
+                      >
+                        {name}
+                      </div>
+                      <button
+                        className="w-4 h-4 rounded-full bg-gray-700 hover:bg-gray-600 text-[10px] flex items-center justify-center flex-shrink-0 ml-0.5"
+                        onClick={() => removePerson(name, depot)}
+                        title={`${name} 해제`}
+                      >
+                        −
+                      </button>
                     </div>
-                    <button
-                      className="w-4 h-4 rounded-full bg-gray-700 hover:bg-gray-600 text-[10px] flex items-center justify-center flex-shrink-0 ml-0.5"
-                      onClick={() => removePerson(name, depot)}
-                      title={`${name} 해제`}
-                    >
-                      −
-                    </button>
-                  </div>
 
-                  {/* 7일 셀 */}
-                  {weekDays.map((d) => {
-                    const row = rowAtDateFor(name, depot, d);
-                    const t = computeInOut(
-                      row,
-                      d,
-                      holidaySet,
-                      nightDiaThreshold
-                    );
-                    const dia =
-                      row?.dia === undefined
-                        ? "-"
-                        : typeof row.dia === "number"
-                        ? row.dia
-                        : String(row.dia).replace(/\s+/g, "");
-                    const outside = d.getMonth() !== monthIdx;
+                    {/* 7일 셀 */}
+                    {weekDays.map((d) => {
+                      const row = rowAtDateFor(name, depot, d);
+                      const t = computeInOut(
+                        row,
+                        d,
+                        holidaySet,
+                        nightDiaThreshold
+                      );
+                      const dia =
+                        row?.dia === undefined
+                          ? "-"
+                          : typeof row.dia === "number"
+                          ? row.dia
+                          : String(row.dia).replace(/\s+/g, "");
+                      const outside = d.getMonth() !== monthIdx;
 
-                    // ==== 근무 상태 색상 판별 ====
-                    let bgColor = "bg-gray-800/60";
-                    const inStr = t.in || "";
-                    const outStr = t.out || "";
+                      // ==== 근무 상태 색상 판별 ====
+                      let bgColor = "bg-gray-800/60";
+                      const inStr = t.in || "";
+                      const outStr = t.out || "";
 
-                    // 1) s1~s6 이면 무조건 주간
-                    if (isSCodeDay(inStr) || isSCodeDay(outStr)) {
-                      bgColor = "bg-yellow-500/30";
-                    } else {
-                      // 2) 시간 규칙 적용
-                      const hIn = hourFromStr(inStr);
-                      const hOut = hourFromStr(outStr);
-                      if (hIn != null && hOut != null) {
-                        if (hIn >= 5 && hIn <= 17) {
-                          bgColor = "bg-yellow-500/30"; // 주간
-                        } else if (hIn >= 17 || hOut <= 5) {
-                          bgColor = "bg-sky-500/30"; // 야간
+                      if (isSCodeDay(inStr) || isSCodeDay(outStr)) {
+                        bgColor = "bg-yellow-500/30";
+                      } else {
+                        const hIn = hourFromStr(inStr);
+                        const hOut = hourFromStr(outStr);
+                        if (hIn != null && hOut != null) {
+                          if (hIn >= 5 && hIn <= 17) {
+                            bgColor = "bg-yellow-500/30";
+                          } else if (hIn >= 17 || hOut <= 5) {
+                            bgColor = "bg-sky-500/30";
+                          }
                         }
                       }
-                    }
 
-                    return (
-                      <div
-                        key={`${depot}::${name}_${fmt(d)}`}
-                        className={`px-1 py-1 text-[12px] leading-tight border-l border-gray-700 ${bgColor} ${
-                          outside ? "opacity-50" : ""
-                        }`}
-                        title={`${depot} • ${name} • ${fmtWithWeekday(
-                          d
-                        )} • DIA ${dia} / ${t.in}~${t.out}`}
-                      >
-                        <div className="font-semibold">{dia}</div>
-                        <div className="mt-0.5">{t.in || "-"}</div>
-                        <div>{t.out || "-"}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      return (
+                        <div
+                          key={`${depot}::${name}_${fmt(d)}`}
+                          className={`px-1 py-1 text-[12px] leading-tight border-l border-gray-700 ${bgColor} ${
+                            outside ? "opacity-50" : ""
+                          }`}
+                          title={`${depot} • ${name} • ${fmtWithWeekday(
+                            d
+                          )} • DIA ${dia} / ${t.in}~${t.out}`}
+                        >
+                          <div className="font-semibold">{dia}</div>
+                          <div className="mt-0.5">{t.in || "-"}</div>
+                          <div>{t.out || "-"}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="mt-1 text-[10px] text-gray-400 text-center">
