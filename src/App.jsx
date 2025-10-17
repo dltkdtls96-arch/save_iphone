@@ -3341,6 +3341,21 @@ function CompareWeeklyBoard({
       setDragY(0);
     }
   };
+  function jumpToToday() {
+    const today = stripTime(new Date());
+    setSelectedDate(today);
+
+    // 오늘이 속한 주 index 계산(오늘 월 기준으로)
+    const md = monthGridMonday(today);
+    const weeksArr = [];
+    for (let i = 0; i < md.length; i += 7) weeksArr.push(md.slice(i, i + 7));
+    const idx = weeksArr.findIndex((w) => w.some((d) => fmt(d) === fmt(today)));
+
+    setWeekPage(idx < 0 ? 0 : idx); // ✅ 주 페이지를 강제로 맞춰주기
+    setSnapping(true); // 부드럽게 스냅
+    setDragY(0);
+    setTimeout(() => setSnapping(false), 300);
+  }
 
   /* --------------------------------
    * 3) 사람 선택(다른 소속에서 불러오기)
@@ -3509,7 +3524,7 @@ function CompareWeeklyBoard({
             !displayedWeekDays.some((d) => fmt(d) === todayISO)) && (
             <button
               className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs"
-              onClick={() => setSelectedDate(stripTime(new Date()))}
+              onClick={jumpToToday}
               title="오늘로"
             >
               오늘로
