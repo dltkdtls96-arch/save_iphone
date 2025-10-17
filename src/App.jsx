@@ -3451,17 +3451,11 @@ function CompareWeeklyBoard({
       onTouchEnd={onTouchEnd}
     >
       {/* 상단바 */}
+      {/* 상단바 */}
       <div
         className="flex items-center justify-between gap-2 flex-wrap"
         data-no-gesture
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
-        style={{
-          touchAction: "auto",
-          position: "relative",
-          zIndex: 3,
-        }}
+        style={{ position: "relative", zIndex: 3, touchAction: "auto" }}
       >
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-300">추가</label>
@@ -3469,7 +3463,7 @@ function CompareWeeklyBoard({
             className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
             value={pickerDepot}
             onChange={(e) => setPickerDepot(e.target.value)}
-            title="사람 추가용 소속 선택 (화면 내용에는 영향 없음)"
+            title="사람 추가용 소속 선택"
           >
             {DEPOTS.map((d) => (
               <option key={d} value={d}>
@@ -3477,6 +3471,7 @@ function CompareWeeklyBoard({
               </option>
             ))}
           </select>
+
           <input
             type="month"
             className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
@@ -3510,10 +3505,11 @@ function CompareWeeklyBoard({
           >
             모두 해제
           </button>
-          {(fmt(selectedDate) !== todayISO || !isCurrentWeekHasToday) && (
+          {(fmt(selectedDate) !== todayISO ||
+            !displayedWeekDays.some((d) => fmt(d) === todayISO)) && (
             <button
-              className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs hover:bg-indigo-500"
-              onClick={goToday}
+              className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-xs"
+              onClick={() => setSelectedDate(stripTime(new Date()))}
               title="오늘로"
             >
               오늘로
@@ -3521,7 +3517,51 @@ function CompareWeeklyBoard({
           )}
         </div>
       </div>
-
+      {/* 추가 패널 */}
+      {pickerOpen && (
+        <div
+          className="mt-2 p-2 rounded-xl bg-gray-900 shadow-lg border border-gray-700"
+          data-no-gesture
+          style={{ position: "relative", zIndex: 3, touchAction: "auto" }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              className="flex-1 bg-gray-700 rounded-xl px-2 py-1 text-sm"
+              placeholder="이름 검색…"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+            />
+            <span className="text-xs text-gray-400">({pickerDepot})</span>
+          </div>
+          <div
+            className="grid gap-1"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))",
+            }}
+          >
+            {selectableNames.map((n) => {
+              const bg = highlightMap?.[n] || "#374151";
+              const fg = getContrastText(bg);
+              return (
+                <button
+                  key={`${pickerDepot}::${n}`}
+                  onClick={() => addPerson(n, pickerDepot)}
+                  className="px-1.5 py-0.5 rounded-md text-[11px] font-semibold truncate transition-opacity"
+                  title={`${pickerDepot} • ${n} 추가`}
+                  style={{
+                    backgroundColor: bg,
+                    color: fg,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    opacity: 0.95,
+                  }}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* ===== 헤더 + 바디 래퍼 ===== */}
       <div className="relative mt-2" style={{ zIndex: 1 }}>
         {/* 🔴 오늘 컬럼 전체(헤더+바디) 테두리 오버레이 — 마지막 사람에서 정확히 끝남 */}
