@@ -3700,21 +3700,67 @@ function CompareWeeklyBoard({
                       const outside = d.getMonth() !== monthIdx;
 
                       // ==== 근무 상태 색상 판별 ====
+                      // ==== 근무 상태 색상 판별 (규칙: 다음날 비번이면 야간, 교대는 '야-휴') ====
+                      // ==== 근무 상태 색상 판별 ====
+                      // 기본 회색
                       let bgColor = "bg-gray-800/60";
-                      const inStr = t.in || "";
-                      const outStr = t.out || "";
 
-                      if (isSCodeDay(inStr) || isSCodeDay(outStr)) {
-                        bgColor = "bg-yellow-500/30";
+                      // 유틸
+                      const norm = (v) =>
+                        typeof v === "string" ? v.replace(/\s/g, "") : v;
+                      const isOffDia = (v) =>
+                        typeof v === "string" &&
+                        (v.includes("비") || v.startsWith("휴"));
+                      const isTime = (v) =>
+                        typeof v === "string" &&
+                        /^\d{1,2}\s*:\s*\d{2}$/.test(v);
+
+                      // 오늘/다음날 DIA
+                      const todayDia = norm(row?.dia);
+                      const nextDay = addDaysSafe(d, 1);
+                      const nextDia = norm(
+                        rowAtDateFor(name, depot, nextDay)?.dia
+                      );
+
+                      // 0) 오늘이 비번/휴면 무조건 회색
+                      if (isOffDia(todayDia)) {
+                        bgColor = "bg-gray-800/60";
                       } else {
-                        const hIn = hourFromStr(inStr);
-                        const hOut = hourFromStr(outStr);
-                        if (hIn != null && hOut != null) {
-                          if (hIn >= 5 && hIn <= 17) {
-                            bgColor = "bg-yellow-500/30";
-                          } else if (hIn >= 17 || hOut <= 5) {
-                            bgColor = "bg-sky-500/30";
-                          }
+                        // 1) 야간 여부
+                        //   - 교대: '야' 다음이 '휴'
+                        //   - 그 외: 다음날 비번이거나, "퇴근이 아침"
+                        const MORNING_HOUR = 12; // 아침 기준 (<=11시). 필요하면 10/12로 조절하세요.
+                        const outH = hourFromStr(t.out); // (이미 있으신 헬퍼) -> number | null
+
+                        let isNight = false;
+                        if (depot === "교대") {
+                          isNight =
+                            todayDia === "야" &&
+                            typeof nextDia === "string" &&
+                            nextDia.startsWith("휴");
+                        } else {
+                          const nextIsBiban =
+                            typeof nextDia === "string" &&
+                            nextDia.includes("비");
+                          const outIsMorning =
+                            outH != null && outH <= MORNING_HOUR;
+                          isNight = nextIsBiban || outIsMorning;
+                        }
+
+                        // 2) 주간 여부: 실제 시간 또는 s코드가 있을 때만 (야간이 아니어야 함)
+                        const hasWork =
+                          (isTime(t.in) ||
+                            isTime(t.out) ||
+                            isSCodeDay?.(t.in) ||
+                            isSCodeDay?.(t.out)) &&
+                          !isNight;
+
+                        if (isNight) {
+                          bgColor = "bg-sky-500/30"; // 야간 = 파랑
+                        } else if (hasWork) {
+                          bgColor = "bg-yellow-500/30"; // 주간 = 노랑
+                        } else {
+                          bgColor = "bg-gray-800/60"; // 휴/비번 등 = 회색
                         }
                       }
 
