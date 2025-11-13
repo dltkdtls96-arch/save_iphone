@@ -59,6 +59,12 @@ const fmtISOWithTZ = (d) => {
   return `${y}-${M}-${D}T${H}:${m}:${s}${sign}${tzH}:${tzM}`;
 };
 
+const fmtHMfromDate = (d) => {
+  const x = toValidDate(d);
+  if (!x) return "--:--";
+  return `${_pad2(x.getHours())}:${_pad2(x.getMinutes())}`;
+};
+
 const isIOS = () => {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
@@ -814,28 +820,35 @@ export default function WakeMidPanel({
         </div>
       </AccordionSection>
 
-      {/* (선택) 간단 미리보기 */}
+      {/* 예정 알람 시간 미리보기 */}
+      {/* 예정 알람 시간 미리보기 */}
       {baseDate && (
-        <div className="rounded-xl bg-gray-900/60 p-3 text-[11px] text-gray-300 space-y-1">
-          <div>기준시각: {fmtISOWithTZ(baseDate)}</div>
+        <div className="rounded-xl bg-gray-900/60 p-3 text-[11px] text-gray-200 space-y-1">
+          <div>예정 알람 시간</div>
+
           <div>
-            차받기: {fmtISOWithTZ(subMinutes(baseDate, cfg.preCarReceiveMin))}
+            차받기 {fmtHMfromDate(subMinutes(baseDate, cfg.preCarReceiveMin))}
           </div>
           <div>
-            출무: {fmtISOWithTZ(subMinutes(baseDate, cfg.preMidWorkMin))}
+            출무 {fmtHMfromDate(subMinutes(baseDate, cfg.preMidWorkMin))}
           </div>
           <div>
-            출고: {fmtISOWithTZ(subMinutes(baseDate, cfg.preMidOutMin))}
+            출고 {fmtHMfromDate(subMinutes(baseDate, cfg.preMidOutMin))}
           </div>
+
           <div>
-            야간 범위:{" "}
+            야간 범위{" "}
             {(() => {
               const start = Math.max(cfg.nightStartMin, cfg.nightEndMin);
               const end = Math.min(cfg.nightStartMin, cfg.nightEndMin);
               const step = Math.max(1, cfg.nightStepMin);
+
               const arr = [];
-              for (let m = start; m >= end; m -= step) arr.push(`${m}분전`);
-              return arr.join(" → ");
+              for (let m = start; m >= end; m -= step) {
+                const t = subMinutes(baseDate, m);
+                arr.push(fmtHMfromDate(t));
+              }
+              return arr.length ? arr.join(", ") : "-";
             })()}
           </div>
         </div>
