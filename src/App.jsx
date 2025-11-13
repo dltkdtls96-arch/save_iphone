@@ -2101,7 +2101,7 @@ export default function App() {
 
   const handleTouchStart = React.useCallback(() => {
     // 문양: 롱프레스 토글 금지
-    if (selectedDepot === "문양") return;
+    if (selectedDepot === "문양" || selectedDepot === "경산") return;
     longPressActive.current = true;
     longPressTimer.current = setTimeout(() => {
       if (longPressActive.current) setAltView((v) => !v);
@@ -3491,12 +3491,13 @@ export default function App() {
                           {routeShowBus ? "셔틀 시간표" : "행로표"}
                         </div>
 
-                        {selectedDepot !== "문양" && (
-                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-md text-[8px] bg-gray-900/70 text-white">
-                            길게 눌러 {routeShowBus ? "행로표" : "셔틀 시간"}{" "}
-                            보기
-                          </div>
-                        )}
+                        {selectedDepot !== "문양" &&
+                          selectedDepot !== "경산" && (
+                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-md text-[8px] bg-gray-900/70 text-white">
+                              길게 눌러 {routeShowBus ? "행로표" : "셔틀 시간"}{" "}
+                              보기
+                            </div>
+                          )}
                       </div>
 
                       <div className="text-xs text-gray-400 mt-1">
