@@ -94,7 +94,10 @@ import {
  *  - 회전: "기준일"을 기준으로 날짜가 하루 지나면 표의 다음 순번 행을 사용
  * ====================================================== */
 
-const STORAGE_KEY = "workCalendarSettingsV3"; // ← 버전 키 (구버전과 충돌 방지)
+// /project/workspace/src/App.jsx
+
+const STORAGE_KEY = "workCalendarSettingsV3"; // 기존이 V3였다면 버전 한번 올려
+const DATA_VERSION = 1; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
 
 // 소속 정규화 (월배/월베/wol 다 월배로)
 const normalizeDepot = (v = "") => {
@@ -1523,6 +1526,9 @@ export default function App() {
         return;
       }
       const s = JSON.parse(raw);
+      // 🔹 저장된 데이터 버전 확인 (없으면 0으로 간주)
+      const savedDataVersion = s.dataVersion ?? 0;
+      const isOldData = savedDataVersion !== DATA_VERSION;
 
       // ✅ 새로 추가 (야간 규칙 소속별 버전 로드)
       if (s.nightDiaByDepot) {
@@ -1539,7 +1545,8 @@ export default function App() {
       //if (s.tableText) setTableText(s.tableText);
       //if (s.myName) setMyName(s.myName);
       // V3
-      if (s.tablesByDepot) setTablesByDepot(s.tablesByDepot);
+      // 🔹 데이터 버전이 동일할 때만 사용자 테이블 복원
+      if (s.tablesByDepot && !isOldData) setTablesByDepot(s.tablesByDepot);
       if (s.myNameMap) setMyNameMap(s.myNameMap);
       if (s.selectedDepot) setSelectedDepot(s.selectedDepot);
       if (s.overridesByDepot) setOverridesByDepot(s.overridesByDepot); // ✅ 복원 추가
@@ -1574,7 +1581,8 @@ export default function App() {
       if (Array.isArray(s.compareSelected))
         setCompareSelected(s.compareSelected);
       if (s.selectedDate) setSelectedDate(stripTime(new Date(s.selectedDate)));
-      if (s.routeImageMap) setRouteImageMap(s.routeImageMap);
+      // ❌ 행로표 이미지 URL 캐시는 버전 바뀌면 깨질 수 있어서 복원하지 않음
+      //if (s.routeImageMap) setRouteImageMap(s.routeImageMap);
     } catch (e) {
       console.warn("[LOAD] 설정 로드 실패", e);
     } finally {
@@ -1694,10 +1702,13 @@ export default function App() {
    * 2) 상태 변경 시: 상태 → localStorage (자동 저장)
    * ----------------------- */
   // ===== 저장 useEffect: 디바운스 & 용량 초과해도 앱 죽지 않게 =====
+  // ===== 저장 useEffect: 디바운스 & 용량 초과해도 앱 죽지 않게 =====
   useEffect(() => {
     if (!loaded) return; // 초기 로드 끝나기 전에는 저장 안 함
 
     const data = {
+      dataVersion: DATA_VERSION, // 🔹 사람테이블/행로표 데이터 버전 같이 저장
+
       //myName,
       myNameMap,
       selectedDepot,
@@ -1707,28 +1718,18 @@ export default function App() {
       nightDiaByDepot,
       highlightMap,
       //tableText,
-      tablesByDepot,
+      tablesByDepot, // ← 같은 DATA_VERSION일 때만 복원
       selectedDate: fmt(selectedDate),
-      routeImageMap, // 서버 URL만 보관할 예정(2번에서 수정)
+      // ❌ 행로표 이미지 URL 캐시는 저장하지 않음
       compareSelected,
       overridesByDepot,
     };
-
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch (e) {
-        console.warn(
-          "[SAVE] 저장 실패(아마 용량 초과). routeImageMap 용량 확인",
-          e
-        );
-        // 용량 초과 시, 이미지맵만 날리고 재시도(설정 값은 반드시 남도록)
-        try {
-          const lite = { ...data, routeImageMap: {} };
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(lite));
-        } catch (e2) {
-          console.warn("[SAVE] 이미지 제거 후에도 실패", e2);
-        }
+        console.warn("[SAVE] 저장 실패(아마 용량 초과)", e);
+        // routeImageMap을 더는 저장하지 않으므로, 여기서는 경고만 남김
       }
     }, SAVE_DEBOUNCE);
 
@@ -1745,7 +1746,7 @@ export default function App() {
     //tableText,
     tablesByDepot,
     selectedDate,
-    routeImageMap,
+    //routeImageMap,
     compareSelected,
     overridesByDepot,
   ]);
@@ -2390,10 +2391,12 @@ export default function App() {
   function resetAll() {
     if (!confirm("모든 저장 데이터를 초기화할까요?")) return;
 
-    // 저장 데이터 삭제
-    localStorage.removeItem(STORAGE_KEY);
+    // 1) localStorage 전체 삭제 (이 출처에서 쓰는 WakeIcsPanel 설정 등도 같이 초기화)
+    try {
+      localStorage.clear();
+    } catch {}
 
-    // 화면 상태 초기화
+    // 2) 화면 상태도 일단 기본값으로 되돌리기
     setSelectedTab("home");
     setSelectedDate(today);
     setAnchorDateByDepot(
@@ -2403,7 +2406,7 @@ export default function App() {
     );
     setSelectedDepot("안심");
 
-    // ✅ 소속별 테이블 리셋
+    // ✅ 소속별 테이블 리셋 (코드에 박힌 최신 테이블 사용)
     setTablesByDepot({
       안심: defaultTableTSV,
       월배: sampleTableFor("월배"),
@@ -2435,7 +2438,26 @@ export default function App() {
     setHighlightMap({});
     setRouteImageMap({});
     setRouteTargetName("");
+
+    // 3) 브라우저 캐시 & 서비스워커까지 정리 → 다음 진입 시 최신 코드/이미지 재설치
+    if (typeof window !== "undefined") {
+      if ("caches" in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((key) => caches.delete(key));
+        });
+      }
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((reg) => reg.unregister());
+        });
+      }
+
+      // 마지막으로 페이지 새로고침해서 완전 초기 상태로 재진입
+      window.location.reload();
+    }
   }
+
   const isPortrait = usePortraitOnly(); // ✅ 추가
   function DutyModal() {
     if (!dutyModal.open) return null;
