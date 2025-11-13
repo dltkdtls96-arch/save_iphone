@@ -326,7 +326,7 @@ export default function WakeIcsPanel(props) {
 
         {/* 🔗 단축어 다운받기 버튼 */}
         <a
-          href="https://www.icloud.com/shortcuts/ef072ae415204a78b7a70a123db85f4a"
+          href="https://www.icloud.com/shortcuts/f9a1d7ce2f8545768ee494b47bc40a15"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-500 active:scale-[.98] transition"
@@ -370,49 +370,66 @@ export default function WakeIcsPanel(props) {
               </div>
             </div>
 
-            {/* 배치 알람 범위: 드롭박스 */}
             <div className="mt-3 grid grid-cols-3 gap-3">
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-gray-300">출근 몇 분 전부터</span>
-                <select
-                  className="bg-gray-800 rounded-lg px-2 py-2"
-                  value={rangeFromMin}
-                  onChange={(e) =>
-                    setRangeFromMin(
-                      Math.max(0, parseInt(e.target.value, 10) || 0)
-                    )
-                  }
-                >
-                  {renderOptions(minuteOptions, "분")}
-                </select>
+                <div className="relative">
+                  <select
+                    className="bg-gray-800 text-white rounded-lg px-2 py-2 w-full appearance-none pr-8"
+                    value={rangeFromMin}
+                    onChange={(e) =>
+                      setRangeFromMin(
+                        Math.max(0, parseInt(e.target.value, 10) || 0)
+                      )
+                    }
+                  >
+                    {renderOptions(minuteOptions, "분")}
+                  </select>
+                  {/* ▼ 화살표 아이콘 */}
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white">
+                    ▼
+                  </span>
+                </div>
               </label>
+
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-gray-300">출근 몇 분 전까지</span>
-                <select
-                  className="bg-gray-800 rounded-lg px-2 py-2"
-                  value={rangeToMin}
-                  onChange={(e) =>
-                    setRangeToMin(
-                      Math.max(0, parseInt(e.target.value, 10) || 0)
-                    )
-                  }
-                >
-                  {renderOptions(minuteOptions, "분")}
-                </select>
+                <div className="relative">
+                  <select
+                    className="bg-gray-800 text-white rounded-lg px-2 py-2 w-full appearance-none pr-8"
+                    value={rangeToMin}
+                    onChange={(e) =>
+                      setRangeToMin(
+                        Math.max(0, parseInt(e.target.value, 10) || 0)
+                      )
+                    }
+                  >
+                    {renderOptions(minuteOptions, "분")}
+                  </select>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white">
+                    ▼
+                  </span>
+                </div>
               </label>
+
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-gray-300">간격(분)</span>
-                <select
-                  className="bg-gray-800 rounded-lg px-2 py-2"
-                  value={rangeStepMin}
-                  onChange={(e) =>
-                    setRangeStepMin(
-                      Math.max(1, parseInt(e.target.value, 10) || 1)
-                    )
-                  }
-                >
-                  {renderOptions(stepOptions, "분")}
-                </select>
+                <div className="relative">
+                  <select
+                    className="bg-gray-800 text-white rounded-lg px-2 py-2 w-full appearance-none pr-8"
+                    value={rangeStepMin}
+                    onChange={(e) =>
+                      setRangeStepMin(
+                        Math.max(1, parseInt(e.target.value, 10) || 1)
+                      )
+                    }
+                  >
+                    {renderOptions(stepOptions, "분")}
+                  </select>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white">
+                    ▼
+                  </span>
+                </div>
               </label>
             </div>
 

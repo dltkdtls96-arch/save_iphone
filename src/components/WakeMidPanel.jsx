@@ -628,19 +628,24 @@ export default function WakeMidPanel({
           <div className="flex flex-col gap-2 h-full">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-gray-300">차받기 (분전)</span>
-              <select
-                className="w-full bg-gray-900 rounded-lg px-2 py-2 text-sm"
-                value={cfg.preCarReceiveMin}
-                onChange={(e) =>
-                  update("preCarReceiveMin", Number(e.target.value) || 0)
-                }
-              >
-                {COMPACT_MINUTES.map((v) => (
-                  <option key={v} value={v}>
-                    {v}분
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  className="w-full bg-gray-900 rounded-lg px-2 py-2 pr-8 text-sm appearance-none"
+                  value={cfg.preCarReceiveMin}
+                  onChange={(e) =>
+                    update("preCarReceiveMin", Number(e.target.value) || 0)
+                  }
+                >
+                  {COMPACT_MINUTES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}분
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white text-base font-semibold">
+                  ▾
+                </span>
+              </div>
             </label>
             <button
               className="w-full px-3 py-2 rounded-lg bg-cyan-600 text-white text-xs hover:opacity-90 disabled:opacity-50 active:scale-[.98]"
@@ -656,19 +661,24 @@ export default function WakeMidPanel({
           <div className="flex flex-col gap-2 h-full">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-gray-300">출무 (분전)</span>
-              <select
-                className="w-full bg-gray-900 rounded-lg px-2 py-2 text-sm"
-                value={cfg.preMidWorkMin}
-                onChange={(e) =>
-                  update("preMidWorkMin", Number(e.target.value) || 0)
-                }
-              >
-                {COMPACT_MINUTES.map((v) => (
-                  <option key={v} value={v}>
-                    {v}분
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  className="w-full bg-gray-900 rounded-lg px-2 py-2 pr-8 text-sm appearance-none"
+                  value={cfg.preMidWorkMin}
+                  onChange={(e) =>
+                    update("preMidWorkMin", Number(e.target.value) || 0)
+                  }
+                >
+                  {COMPACT_MINUTES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}분
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white text-base font-semibold">
+                  ▾
+                </span>
+              </div>
             </label>
             <button
               className="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-50 active:scale-[.98]"
@@ -684,19 +694,24 @@ export default function WakeMidPanel({
           <div className="flex flex-col gap-2 h-full">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-gray-300">출고 (분전)</span>
-              <select
-                className="w-full bg-gray-900 rounded-lg px-2 py-2 text-sm"
-                value={cfg.preMidOutMin}
-                onChange={(e) =>
-                  update("preMidOutMin", Number(e.target.value) || 0)
-                }
-              >
-                {COMPACT_MINUTES.map((v) => (
-                  <option key={v} value={v}>
-                    {v}분
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  className="w-full bg-gray-900 rounded-lg px-2 py-2 pr-8 text-sm appearance-none"
+                  value={cfg.preMidOutMin}
+                  onChange={(e) =>
+                    update("preMidOutMin", Number(e.target.value) || 0)
+                  }
+                >
+                  {COMPACT_MINUTES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}분
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white text-base font-semibold">
+                  ▾
+                </span>
+              </div>
             </label>
             <button
               className="w-full px-3 py-2 rounded-lg bg-rose-600 text-white text-xs hover:opacity-90 disabled:opacity-50 active:scale-[.98]"
@@ -720,60 +735,75 @@ export default function WakeMidPanel({
           {/* 시작 */}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-300">시작 (분전부터)</span>
-            <select
-              className="w-full bg-gray-900 rounded-lg px-2 py-2 text-sm"
-              value={cfg.nightStartMin}
-              onChange={(e) =>
-                update("nightStartMin", Number(e.target.value) || 0)
-              }
-            >
-              {NIGHT_MINUTES.map((v) => (
-                <option key={v} value={v}>
-                  {v}분
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="w-full bg-gray-900 rounded-lg px-2 py-2 pr-8 text-sm appearance-none"
+                value={cfg.nightStartMin}
+                onChange={(e) =>
+                  update("nightStartMin", Number(e.target.value) || 0)
+                }
+              >
+                {NIGHT_MINUTES.map((v) => (
+                  <option key={v} value={v}>
+                    {v}분
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white text-base font-semibold">
+                ▾
+              </span>
+            </div>
           </label>
 
           {/* 끝 */}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-300">끝 (분전까지)</span>
-            <select
-              className="w-full bg-gray-900 rounded-lg px-2 py-2 text-sm"
-              value={cfg.nightEndMin}
-              onChange={(e) =>
-                update("nightEndMin", Number(e.target.value) || 0)
-              }
-            >
-              {NIGHT_MINUTES.map((v) => (
-                <option key={v} value={v}>
-                  {v}분
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="w-full bg-gray-900 rounded-lg px-2 py-2 pr-8 text-sm appearance-none"
+                value={cfg.nightEndMin}
+                onChange={(e) =>
+                  update("nightEndMin", Number(e.target.value) || 0)
+                }
+              >
+                {NIGHT_MINUTES.map((v) => (
+                  <option key={v} value={v}>
+                    {v}분
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white text-base font-semibold">
+                ▾
+              </span>
+            </div>
           </label>
 
           {/* 간격 */}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-300">간격 (분)</span>
-            <select
-              className="w-full bg-gray-900 rounded-lg px-2 py-2 text-sm"
-              value={cfg.nightStepMin}
-              onChange={(e) =>
-                update("nightStepMin", Number(e.target.value) || 1)
-              }
-            >
-              {NIGHT_STEPS.map((v) => (
-                <option key={v} value={v}>
-                  {v}분
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="w-full bg-gray-900 rounded-lg px-2 py-2 pr-8 text-sm appearance-none"
+                value={cfg.nightStepMin}
+                onChange={(e) =>
+                  update("nightStepMin", Number(e.target.value) || 1)
+                }
+              >
+                {NIGHT_STEPS.map((v) => (
+                  <option key={v} value={v}>
+                    {v}분
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white text-base font-semibold">
+                ▾
+              </span>
+            </div>
           </label>
 
           <div className="col-span-3">
             <button
-              className="mt-2 w-full px-3 py-2 rounded-lg bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-50 active:scale-[.98]"
+              className="mt-2 w-full px-3 py-2 rounded-lg bg-orange-600 text-white text-xs hover:opacity-90 disabled:opacity-50 active:scale-[.98]"
               onClick={onNightRange}
               disabled={disabled}
               title="중간 시각 기준으로 야간 범위 알람 여러 개 생성"

@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState, useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 // icons
-import { Route as RouteIcon } from "lucide-react";
+import { AlarmCheckIcon, Route as RouteIcon } from "lucide-react";
 import WakeIcsPanel from "./components/WakeIcsPanel";
 import WakeMidPanel from "./components/WakeMidPanel";
 
@@ -3647,7 +3647,8 @@ export default function App() {
                   data-no-gesture
                 >
                   <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <RouteIcon className="w-5 h-5" /> 알람/일정
+                    <AlarmCheckIcon className="w-5 h-5" />
+                    출근/중간(1/2)
                   </h3>
                   <div className="flex items-center gap-2 flex-wrap">
                     <input
@@ -3707,7 +3708,8 @@ export default function App() {
                   data-no-gesture
                 >
                   <h3 className="text-lg font-semibold flex items-center gap-2">
-                    ⏰ 중간 알람
+                    <AlarmCheckIcon className="w-5 h-5" />
+                    출근/중간(2/2)
                   </h3>
                   <div className="flex items-center gap-2 flex-wrap">
                     <input
