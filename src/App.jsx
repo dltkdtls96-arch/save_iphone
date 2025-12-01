@@ -3088,19 +3088,24 @@ export default function App() {
                                           : "text-gray-100")
                                       }
                                     >
-                                      <div
-                                        className={`break-words text-[clamp(12px,1vw,11px)] leading-tight ${diaColorClass} mb-[4px]`}
-                                      >
-                                        {diaLabel}
-                                      </div>
-                                      <div className="flex flex-col gap-[3px] leading-[1.08]">
-                                        <div className="truncate text-[clamp(10px,1vw,11px)] max-w-[50px]">
-                                          {t.in}
-                                        </div>
-                                        <div className="truncate text-[clamp(9px,1vw,11px)] max-w-[50px]">
-                                          {t.out}
-                                        </div>
-                                      </div>
+{/* DIA 숫자 */}
+<div
+  className={`whitespace-nowrap text-[clamp(14px,2.8vw,15px)] leading-tight ${diaColorClass} mb-[4px]`}
+>
+  {diaLabel}
+</div>
+
+{/* 출퇴근 시간 */}
+<div className="flex flex-col gap-[3px] leading-[1.08]">
+  <div className="whitespace-nowrap text-[clamp(12px,2.6vw,12px)]">
+    {t.in}
+  </div>
+  <div className="whitespace-nowrap text-[clamp(11px,2.6vw,12px)]">
+    {t.out}
+  </div>
+</div>
+
+
                                       {/*
       <div className="truncate text-[clamp(8px,1vw,11px)] max-w-[50px]">
         {t.isNight && selectedDepot !== "교대" ? (
@@ -3895,7 +3900,7 @@ export default function App() {
           <FixedTabbarPortal>
             <nav
               ref={tabbarRef}
-              className="bg-gray-900/90 backdrop-blur-md border-t border-gray-700 fixed left-0 right-0 bottom-0 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+              className="bg-gray-900/90 backdrop-blur-md border-t border-gray-700 fixed left-0 right-0 bottom-0 pt-3 pb-[0]"
             >
               <div className="flex justify-around items-center text-gray-300 text-xs">
                 {/* 홈 */}
@@ -3923,7 +3928,7 @@ export default function App() {
                     selectedTab === "home" ? "text-blue-400" : "text-gray-300"
                   }`}
                 >
-                  <CalendarIcon className="w-5 h-5 mb-0.5" />홈
+                  <CalendarIcon className="w-5 h-5 mb-0" />홈
                 </button>
 
                 {/* 전체 */}
@@ -3933,7 +3938,7 @@ export default function App() {
                     selectedTab === "roster" ? "text-blue-400" : "text-gray-300"
                   }`}
                 >
-                  <List className="w-5 h-5 mb-0.5" />
+                  <List className="w-5 h-5 mb-0" />
                   전체
                 </button>
 
@@ -3949,7 +3954,7 @@ export default function App() {
                     selectedTab === "route" ? "text-blue-400" : "text-gray-300"
                   }`}
                 >
-                  <RouteIcon className="w-5 h-5 mb-0.5" strokeWidth={1.75} />
+                  <RouteIcon className="w-5 h-5 mb-0" strokeWidth={1.75} />
                   행로
                 </button>
 
@@ -3963,7 +3968,7 @@ export default function App() {
                       : "text-gray-300"
                   }`}
                 >
-                  <Users className="w-5 h-5 mb-0.5" />
+                  <Users className="w-5 h-5 mb-0" />
                   그룹
                 </button>
                 {/* 설정 */}
@@ -3975,7 +3980,7 @@ export default function App() {
                       : "text-gray-300"
                   }`}
                 >
-                  <Settings className="w-5 h-5 mb-0.5" />
+                  <Settings className="w-5 h-5 mb-0" />
                   설정
                 </button>
 
@@ -3985,7 +3990,7 @@ export default function App() {
                   className="flex flex-col items-center text-gray-400 hover:text-red-400"
                   title="저장된 설정/내용 초기화"
                 >
-                  <Upload className="w-5 h-5 mb-0.5 rotate-180" />
+                  <Upload className="w-5 h-5 mb-0 rotate-180" />
                   초기화
                 </button>
               </div>

@@ -6,9 +6,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
     />
+    <!-- theme-color는 manifest와 동일 -->
     <meta name="theme-color" content="#0ea5e9" />
 
-    <!-- 세로모드 고정 -->
+    <!-- ✅ 세로모드 고정 관련 메타 (지원되는 브라우저에서 힌트) -->
     <meta name="screen-orientation" content="portrait" />
     <meta name="x5-orientation" content="portrait" />
     <meta name="x5-fullscreen" content="true" />
@@ -27,12 +28,14 @@
   </head>
 
   <body
+
     style="
       padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
     "
   >
+    <!-- React 마운트 대상 -->
     <div id="root">
+      <!-- 초기 스플래시 (React가 마운트되면 대체됨) -->
       <div
         id="app-splash"
         role="status"

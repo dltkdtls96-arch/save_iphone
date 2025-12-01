@@ -30,11 +30,11 @@ div::-webkit-scrollbar {
   display: none;
 }
 
-/* body를 고정해서 전체를 앱처럼 */
+/* body를 고정해서 전체를 앱처럼 → 이 부분이 iOS에서 문제라 수정 */
 body {
-  position: fixed;
-  inset: 0;
   width: 100%;
+  /* position: fixed;
+     inset: 0; */
 }
 
 /* ==============================
@@ -72,7 +72,7 @@ body {
    - 다크: data-theme="dark"
    ============================== */
 
-/* 🌕 라이트 테마용 CSS 변수 + 배경 */
+/* 🌕 라이트 테마용 CSS 변수 */
 html:not([data-theme]),
 html[data-theme="light"] {
   color-scheme: light;
@@ -94,20 +94,18 @@ html[data-theme="light"] {
   --text-muted: #6b7280;
 
   --accent: #2563eb;
+  --tabbar-bg: #ffffff; /* 🔵 탭바 + body 공통 배경색 */
+
 }
 
+/* 🔵 라이트 모드 body 배경 = 탭바 색과 동일 */
 html:not([data-theme]) body,
 html[data-theme="light"] body {
-  background: radial-gradient(
-      circle at top,
-      var(--bg-page-top) 0,
-      transparent 50%
-    ),
-    linear-gradient(to bottom, var(--bg-page-mid), var(--bg-page-bottom));
+  background-color: var(--tabbar-bg);
   color: var(--text-main);
 }
 
-/* 🌑 다크 테마 베이스 (색은 Tailwind 기본 다크 디자인 사용) */
+/* 🌑 다크 테마 베이스 */
 html[data-theme="dark"] {
   color-scheme: dark;
 }
@@ -118,14 +116,8 @@ html[data-theme="dark"] body {
 }
 
 /* ===================================================
-   3) Tailwind 다크톤 → 라이트톤 재매핑
-   (라이트 테마일 때만 적용)
+   3) Tailwind 다크톤 → 라이트톤 재매핑 (라이트 전용)
    =================================================== */
-
-/* ⚠️ 여기부터는
-   html:not([data-theme]) 또는 html[data-theme="light"]
-   즉 "라이트일 때만" 적용된다.
-*/
 
 /* 앱 전체 배경이었던 bg-slate-950 → 라이트 베이스 */
 html:not([data-theme]) .bg-slate-950,
@@ -262,7 +254,7 @@ html[data-theme="light"] .bg-gray-700\/80 {
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
 }
 
-/* hover 시 살짝만 강조 (위에 이미 한 번 있지만 중복 무방) */
+/* hover 시 살짝만 강조 */
 html:not([data-theme]) .hover\:bg-gray-600:hover,
 html[data-theme="light"] .hover\:bg-gray-600:hover {
   background-color: #eef2ff !important;
@@ -378,18 +370,19 @@ html[data-theme="light"] input::placeholder {
    5) 하단 탭바 – 라이트 탭바
    ========================================= */
 
-html:not([data-theme]) .bg-gray-900\/90,
-html[data-theme="light"] .bg-gray-900\/90 {
-  background-color: rgba(248, 250, 252, 0.98) !important;
-  background-image: none !important;
-
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-
-  border-top: 1px solid rgba(148, 163, 184, 0.35);
-
-  box-shadow: 0 -2px 6px rgba(15, 23, 42, 0.1);
-}
+   html:not([data-theme]) .bg-gray-900\/90,
+   html[data-theme="light"] .bg-gray-900\/90 {
+     background-color: var(--tabbar-bg) !important;
+     background-image: none !important;
+   
+     backdrop-filter: blur(14px);
+     -webkit-backdrop-filter: blur(14px);
+   
+     border-top: 1px solid rgba(148, 163, 184, 0.35);
+   
+     box-shadow: 0 -2px 6px rgba(15, 23, 42, 0.1);
+   }
+   
 
 /* =========================================
    6) 모바일 여백
@@ -536,7 +529,6 @@ html[data-theme="light"] .shadow-inner {
    12) 기타 유틸
    ========================================= */
 
-/* 예전 Vite 기본에서 쓰던 여백 유틸 (있어도 무방) */
 .mt-panel-space {
   margin-top: 2rem;
   margin-bottom: 2rem;
@@ -546,15 +538,13 @@ html[data-theme="light"] .shadow-inner {
    안내 문구(text-amber-300) 라이트/다크 보정
    ========================================= */
 
-/* 라이트 모드 → 더 진한 색으로 */
 html[data-theme="light"] .text-amber-300 {
-  color: #d97706 !important; /* amber-600 계열 */
+  color: #d97706 !important;
   font-weight: 500;
 }
 
-/* 다크 모드 → 원래처럼 밝게 */
 html[data-theme="dark"] .text-amber-300 {
-  color: #fbbf24 !important; /* amber-300 */
+  color: #fbbf24 !important;
 }
 
 /* =========================================
@@ -648,14 +638,12 @@ html[data-theme="dark"] .bg-blue-600 {
    PasswordGate 전체 배경
    ========================================= */
 
-/* 라이트 모드 / 기본: 밝은 오버레이 느낌 */
 html:not([data-theme]) .password-gate-root,
 html[data-theme="light"] .password-gate-root {
-  background-color: rgba(248, 250, 252, 0.96) !important; /* 거의 흰색 */
+  background-color: rgba(248, 250, 252, 0.96) !important;
   color: #0f172a !important;
 }
 
-/* 다크 모드: 예전처럼 완전 블랙 + 밝은 글자 */
 html[data-theme="dark"] .password-gate-root {
   background-color: #000000 !important;
   color: #f9fafb !important;
@@ -665,13 +653,11 @@ html[data-theme="dark"] .password-gate-root {
    PasswordGate PIN 점 (●●●●)
    ========================================= */
 
-/* 라이트 모드: 진한 네이비 점 (배경 밝을 때도 또렷) */
 html:not([data-theme]) .pin-dot,
 html[data-theme="light"] .pin-dot {
-  background-color: #0f172a !important; /* slate-900 느낌 */
+  background-color: #0f172a !important;
 }
 
-/* 다크 모드: 원래처럼 흰 점 */
 html[data-theme="dark"] .pin-dot {
   background-color: #ffffff !important;
 }
@@ -680,19 +666,58 @@ html[data-theme="dark"] .pin-dot {
    PasswordGate 키패드 버튼
    ========================================= */
 
-/* 라이트 모드: 흰 배경 + 진한 글씨, 살짝 그림자 */
 html:not([data-theme]) .pin-key,
 html[data-theme="light"] .pin-key {
   background: #ffffff !important;
-  color: #1f2937 !important; /* gray-800 */
+  color: #1f2937 !important;
   border: 1px solid #d1d5db !important;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12) !important;
 }
 
-/* 다크 모드: 예전 느낌 – 투명 배경 + 흰 테두리 */
 html[data-theme="dark"] .pin-key {
   background: transparent !important;
   color: #ffffff !important;
   border: 1px solid rgba(255, 255, 255, 0.4) !important;
   box-shadow: none !important;
 }
+
+/* =========================================
+   탭바 배경을 아래로 더 늘리기 (아이콘은 그대로)
+   ========================================= */
+
+.tabbar-shell {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* 배경만 아래로 빼내기 */
+.tabbar-shell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1.5 * env(safe-area-inset-bottom));
+  height: calc(1.5 * env(safe-area-inset-bottom));
+
+  background-color: var(--tabbar-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  z-index: -1;
+}
+
+/* 5-b) 하단 탭바 – 다크 탭바 */
+html[data-theme="dark"] .bg-gray-900\/90 {
+  background-color: #020617 !important; /* 다크 body랑 완전 통일 */
+  background-image: none !important;
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  border-top: 1px solid rgba(15, 23, 42, 0.85);
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.65);
+}
+
