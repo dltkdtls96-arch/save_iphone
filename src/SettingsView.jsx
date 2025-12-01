@@ -40,6 +40,8 @@ export default function SettingsView(props) {
 
     onUpload,
     buildGyodaeTable, // ← 추가
+    theme,
+    setTheme,
   } = props;
 
   const palette = [
@@ -77,7 +79,6 @@ export default function SettingsView(props) {
       문양: 24,
       경산: 21,
       교대: 21,
-
     };
 
     const defaultNightDia = defaultNightDiaByDepot[selectedDepot];
@@ -276,9 +277,41 @@ export default function SettingsView(props) {
               </div>
             </div>
           </div>
-
           {/* 오른쪽 컬럼 */}
           <div className="space-y-3">
+            {/* ✅ 테마 설정 */}
+            <div className="p-3 rounded-2xl bg-gray-900/60 text-sm">
+              <div className="font-semibold mb-2">화면 테마</div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTheme("light")}
+                  className={
+                    "flex-1 px-3 py-2 rounded-xl text-xs font-medium border transition-colors " +
+                    (theme === "light"
+                      ? "bg-indigo-500/10 border-indigo-500 text-indigo-600"
+                      : "bg-gray-800 border-gray-700 text-gray-300")
+                  }
+                >
+                  라이트
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme("dark")}
+                  className={
+                    "flex-1 px-3 py-2 rounded-xl text-xs font-medium border transition-colors " +
+                    (theme === "dark"
+                      ? "bg-indigo-500/10 border-indigo-500 text-indigo-600"
+                      : "bg-gray-800 border-gray-700 text-gray-300")
+                  }
+                >
+                  다크
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-gray-400">
+                이 앱만 따로 라이트/다크를 정해서 쓸 수 있어요.
+              </p>
+            </div>
             {/* 야간 규칙 (소속별) */}
             <div className="p-3 rounded-2xl bg-gray-900/60 text-sm">
               <div className="font-semibold mb-1">
