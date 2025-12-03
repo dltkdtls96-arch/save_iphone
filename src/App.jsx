@@ -4150,11 +4150,11 @@ function RosterGrid({
               t.isNight ? " (야)" : ""
             }`}
           >
-            <div className="text-[12px] font-semibold whitespace-nowrap w-full text-center">
+            <div className="text-[11px] font-semibold whitespace-nowrap w-full text-center">
               {name}
             </div>
 
-            <div className="text-[11px] font-extrabold text-gray-200 whitespace-nowrap">
+            <div className="text-[12px] font-extrabold text-gray-200 whitespace-nowrap">
               {diaLabel}
             </div>
           </button>
