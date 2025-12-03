@@ -99,7 +99,7 @@ import {
 // /project/workspace/src/App.jsx
 
 const STORAGE_KEY = "workCalendarSettingsV3"; // 기존이 V3였다면 버전 한번 올려
-const DATA_VERSION = 1; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
+const DATA_VERSION = 2; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
 
 // 소속 정규화 (월배/월베/wol 다 월배로)
 const normalizeDepot = (v = "") => {
@@ -4150,8 +4150,11 @@ function RosterGrid({
               t.isNight ? " (야)" : ""
             }`}
           >
-            <div className="text-[10px] font-semibold truncate">{name}</div>
-            <div className="text-[11px] font-extrabold text-gray-200 truncate">
+            <div className="text-[12px] font-semibold whitespace-nowrap w-full text-center">
+              {name}
+            </div>
+
+            <div className="text-[11px] font-extrabold text-gray-200 whitespace-nowrap">
               {diaLabel}
             </div>
           </button>
