@@ -398,7 +398,7 @@ const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일
 21\t유섭\t휴5\t\t\t\t\t\t
 22\t조유정\t6\t6:53\t16:04\t9:09\t17:58\t9:23\t17:19
 23\t김성우\t14\t9:46\t18:58\t10:53\t19:28\t9:57\t17:51
-24\t최순철\t24\t14:42\t7:53\t15:25\t7:59\t16:21\t8:02
+24\t박재용\t24\t14:42\t7:53\t15:25\t7:59\t16:21\t8:02
 25\t박수영\t24~\t\t\t\t\t\t
 26\t류다연\t휴6\t\t\t\t\t\t
 27\t문남철\t5\t6:53\t18:13\t9:01\t17:03\t9:09\t17:03
@@ -426,7 +426,7 @@ const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일
 49\t방지현\t19\t11:06\t19:43\t11:49\t20:04\t11:01\t19:11
 50\t장진영\t34\t19:02\t10:01\t18:58\t11:03\t21:10\t11:02
 51\t김일규\t34~\t\t\t\t\t\t
-52\t박재용\t휴13\t\t\t\t\t\t
+52\t최순철\t휴13\t\t\t\t\t\t
 53\t이민영\t휴14\t\t\t\t\t\t
 54\t황재필\t1\t6:23\t15:16\t7:41\t15:35\t7:39\t15:33
 55\t김성은\t11\t7:56\t17:28\t9:41\t18:34\t9:32\t17:27
@@ -436,7 +436,7 @@ const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일
 59\t김승현\t대3\t9:00\t18:00\t9:00\t18:00\t9:00\t18:00
 60\t정진현\t22\t18:18\t20:00\t12:13\t20:28\t11:49\t19:47
 61\t김함규\t27\t17:26\t8:34\t17:28\t8:47\t17:05\t8:29
-62\t송병옥\t27~\t\t\t\t\t\t
+62\t(공란)\t27~\t\t\t\t\t\t
 63\t이동수\t휴16\t\t\t\t\t\t
 64\t윤창민\t4\t6:43\t16:12\t8:53\t16:29\t9:05\t16:55
 65\t김선도\t13\t8:31\t18:56\t10:21\t18:58\t9:49\t17:43
@@ -3088,23 +3088,22 @@ export default function App() {
                                           : "text-gray-100")
                                       }
                                     >
-{/* DIA 숫자 */}
-<div
-  className={`whitespace-nowrap text-[clamp(14px,2.8vw,15px)] leading-tight ${diaColorClass} mb-[4px]`}
->
-  {diaLabel}
-</div>
+                                      {/* DIA 숫자 */}
+                                      <div
+                                        className={`whitespace-nowrap text-[clamp(14px,2.8vw,15px)] leading-tight ${diaColorClass} mb-[4px]`}
+                                      >
+                                        {diaLabel}
+                                      </div>
 
-{/* 출퇴근 시간 */}
-<div className="flex flex-col gap-[3px] leading-[1.08]">
-  <div className="whitespace-nowrap text-[clamp(12px,2.6vw,12px)]">
-    {t.in}
-  </div>
-  <div className="whitespace-nowrap text-[clamp(11px,2.6vw,12px)]">
-    {t.out}
-  </div>
-</div>
-
+                                      {/* 출퇴근 시간 */}
+                                      <div className="flex flex-col gap-[3px] leading-[1.08]">
+                                        <div className="whitespace-nowrap text-[clamp(12px,2.6vw,12px)]">
+                                          {t.in}
+                                        </div>
+                                        <div className="whitespace-nowrap text-[clamp(11px,2.6vw,12px)]">
+                                          {t.out}
+                                        </div>
+                                      </div>
 
                                       {/*
       <div className="truncate text-[clamp(8px,1vw,11px)] max-w-[50px]">
