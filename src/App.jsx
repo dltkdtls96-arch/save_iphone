@@ -681,6 +681,21 @@ function fmtWithWeekday(date) {
   return `${iso} (${weekday})`;
 }
 
+function isOvernightShift(inStr, outStr) {
+  const inHM = normalizeHM(inStr);
+  const outHM = normalizeHM(outStr);
+  if (!inHM || !outHM) return false;
+
+  const [ih, im] = inHM.split(":").map(Number);
+  const [oh, om] = outHM.split(":").map(Number);
+  const inMin = ih * 60 + im;
+  const outMin = oh * 60 + om;
+
+  // 퇴근이 출근보다 "같거나 빠르면" 자정 넘어간 야간으로 봄
+  return outMin <= inMin;
+}
+
+
 function stripTime(d) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -901,7 +916,10 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
 
       // '대n' 중 숫자만 추출
       const n = Number(label.replace(/[^0-9]/g, ""));
-      const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
+      const isNightShift =
+        isOvernightShift(src.in, src.out) ||
+        (Number.isFinite(n) && n >= nightDiaThreshold);
+
 
       return {
         in: src.in || "-",
