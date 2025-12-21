@@ -5229,7 +5229,7 @@ function CompareWeeklyBoard({
                             nextDia.includes("비");
                           const outIsMorning =
                             outH != null && outH <= MORNING_HOUR;
-                          isNight = nextIsBiban || outIsMorning;
+                          isNight = Boolean(t?.isNight) || nextIsBiban || outIsMorning;
                         }
 
                         const hasWork =
