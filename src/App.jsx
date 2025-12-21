@@ -713,23 +713,6 @@ function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
-
-function hmToMin(v) {
-  const hm = normalizeHM(v);
-  if (!hm) return null;
-  const [h, m] = hm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function isOvernightByTimes(inV, outV) {
-  const a = hmToMin(inV);
-  const b = hmToMin(outV);
-  if (a == null || b == null) return false;
-  // 퇴근이 출근보다 같거나 빠르면(=다음날 퇴근) 야간으로 간주
-  return b <= a;
-}
-
-
 // ----- helpers (기존 유틸 근처에 추가) -----
 function monthGridSunday(date) {
   const y = date.getFullYear();
@@ -917,12 +900,8 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
           : row.holiday;
 
       // '대n' 중 숫자만 추출
-      //const n = Number(label.replace(/[^0-9]/g, ""));
-      //const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
-
-      // ✅ 대근은 임계값이 아니라 "시간"으로 야간 판정
-        const isNightShift = isOvernightByTimes(src.in, src.out);
-
+      const n = Number(label.replace(/[^0-9]/g, ""));
+      const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
 
       return {
         in: src.in || "-",
@@ -5250,7 +5229,7 @@ function CompareWeeklyBoard({
                             nextDia.includes("비");
                           const outIsMorning =
                             outH != null && outH <= MORNING_HOUR;
-                          isNight = Boolean(t?.isNight) || nextIsBiban || outIsMorning;
+                          isNight = nextIsBiban || outIsMorning;
                         }
 
                         const hasWork =
