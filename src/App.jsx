@@ -3533,12 +3533,15 @@ export default function App() {
                             style={{
                               transform:
                                 routeShowBus ||
-                                ["월배", "문양", "경산"].includes(selectedDepot)
+                                ["월배", "문양"].includes(selectedDepot)
                                   ? "none"
+                                  : selectedDepot === "경산"
+                                  ? "scale(2.0) translateY(7.7%)"
                                   : "scale(1.5) translateY(7.7%)",
                               transformOrigin: "center center",
                             }}
                           />
+
 
                           <div className="absolute top-2 right-2 px-2 py-1 rounded-lg text-[10px] font-semibold bg-gray-900/80 text-white">
                             {routeShowBus ? "셔틀 시간표" : "행로표"}
