@@ -668,6 +668,24 @@ function normalizeHM(v) {
   return mapped ? toHMorNull(mapped) : null;
 }
 
+function hmToMin(hm) {
+  if (!hm) return null;
+  const [h, m] = hm.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+// 출근 > 퇴근이면 '익일 퇴근' → 야간으로 판정
+function isOvernightByTimes(inV, outV) {
+  const inHM = normalizeHM(inV);
+  const outHM = normalizeHM(outV);
+  if (!inHM || !outHM) return false;
+  const a = hmToMin(inHM);
+  const b = hmToMin(outHM);
+  if (a == null || b == null) return false;
+  return b < a;
+}
+
 function fmt(d) {
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
@@ -713,23 +731,7 @@ function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
-function hmToMin(hm) {
-  if (!hm) return null;
-  const [h, m] = hm.split(":").map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  return h * 60 + m;
-}
 
-// 출근 > 퇴근이면 '익일 퇴근' → 야간으로 판정
-function isOvernightByTimes(inV, outV) {
-  const inHM = normalizeHM(inV);
-  const outHM = normalizeHM(outV);
-  if (!inHM || !outHM) return false;
-  const a = hmToMin(inHM);
-  const b = hmToMin(outHM);
-  if (a == null || b == null) return false;
-  return b < a;
-}
 
 
 // ----- helpers (기존 유틸 근처에 추가) -----
