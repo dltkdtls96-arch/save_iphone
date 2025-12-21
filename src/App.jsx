@@ -937,9 +937,11 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
 
   let outTime = srcToday.out || "-";
   let combo = `${tType}-${tType}`;
-  let night = false;
 
-  if (typeof row.dia === "number" && row.dia >= nightDiaThreshold) {
+  // 숫자 DIA도 "시간 기준"으로 야간 판정
+  const night = isOvernightShift(srcToday.in, srcToday.out);
+
+  if (night) {
     const tomorrow = new Date(date);
     tomorrow.setDate(date.getDate() + 1);
     const nextType = getDayType(tomorrow, holidaySet);
@@ -951,8 +953,8 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
         : row.holiday;
     outTime = srcNext.out || "-";
     combo = `${tType}-${nextType}`;
-    night = true;
   }
+
 
   return {
     in: srcToday.in || "-",
