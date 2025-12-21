@@ -65,6 +65,7 @@ export default function SettingsView(props) {
       월배: "2025-11-01",
       안심: "2025-10-01",
       교대: "2025-09-29",
+      교대: "2025-12-28",
     };
 
     const defaultAnchor = defaultAnchorByDepot[selectedDepot];
