@@ -681,21 +681,6 @@ function fmtWithWeekday(date) {
   return `${iso} (${weekday})`;
 }
 
-function isOvernightShift(inStr, outStr) {
-  const inHM = normalizeHM(inStr);
-  const outHM = normalizeHM(outStr);
-  if (!inHM || !outHM) return false;
-
-  const [ih, im] = inHM.split(":").map(Number);
-  const [oh, om] = outHM.split(":").map(Number);
-  const inMin = ih * 60 + im;
-  const outMin = oh * 60 + om;
-
-  // 퇴근이 출근보다 "같거나 빠르면" 자정 넘어간 야간으로 봄
-  return outMin <= inMin;
-}
-
-
 function stripTime(d) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -916,10 +901,7 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
 
       // '대n' 중 숫자만 추출
       const n = Number(label.replace(/[^0-9]/g, ""));
-      const isNightShift =
-        isOvernightShift(src.in, src.out) ||
-        (Number.isFinite(n) && n >= nightDiaThreshold);
-
+      const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
 
       return {
         in: src.in || "-",
@@ -937,11 +919,9 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
 
   let outTime = srcToday.out || "-";
   let combo = `${tType}-${tType}`;
+  let night = false;
 
-  // 숫자 DIA도 "시간 기준"으로 야간 판정
-  const night = isOvernightShift(srcToday.in, srcToday.out);
-
-  if (night) {
+  if (typeof row.dia === "number" && row.dia >= nightDiaThreshold) {
     const tomorrow = new Date(date);
     tomorrow.setDate(date.getDate() + 1);
     const nextType = getDayType(tomorrow, holidaySet);
@@ -953,8 +933,8 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
         : row.holiday;
     outTime = srcNext.out || "-";
     combo = `${tType}-${nextType}`;
+    night = true;
   }
-
 
   return {
     in: srcToday.in || "-",
@@ -2956,6 +2936,7 @@ export default function App() {
                                   diaColorClass = "text-yellow-300";
                                 else if (label === "야")
                                   diaColorClass = "text-sky-300";
+
 // "휴" 또는 그 외는 색 없음(기본)
                               } else {
                                 if (typeof row?.dia === "number") {
