@@ -2956,7 +2956,7 @@ export default function App() {
                                   diaColorClass = "text-yellow-300";
                                 else if (label === "야")
                                   diaColorClass = "text-sky-300";
-                                // "휴" 또는 그 외는 색 없음(기본)
+// "휴" 또는 그 외는 색 없음(기본)
                               } else {
                                 if (typeof row?.dia === "number") {
                                   diaColorClass =
@@ -2974,10 +2974,14 @@ export default function App() {
                                     nextDate
                                   );
                                   const nextDia = nextRow?.dia;
-                                  const nextIsBibeon =
-                                    typeof nextDia === "string" &&
-                                    nextDia.replace(/\s/g, "").includes("비번");
-                                  diaColorClass = nextIsBibeon
+
+                                  // 다음 날 라벨에 "비번"이 있거나 "~"가 포함되면 야간으로 간주
+                                  const nextDiaStr = String(nextDia || "");
+                                  const isNightTarget = 
+                                    nextDiaStr.includes("비번") || 
+                                    nextDiaStr.includes("~");
+
+                                  diaColorClass = isNightTarget
                                     ? "text-sky-300"
                                     : "text-yellow-300";
                                 }
