@@ -713,6 +713,25 @@ function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
+function hmToMin(hm) {
+  if (!hm) return null;
+  const [h, m] = hm.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+// 출근 > 퇴근이면 '익일 퇴근' → 야간으로 판정
+function isOvernightByTimes(inV, outV) {
+  const inHM = normalizeHM(inV);
+  const outHM = normalizeHM(outV);
+  if (!inHM || !outHM) return false;
+  const a = hmToMin(inHM);
+  const b = hmToMin(outHM);
+  if (a == null || b == null) return false;
+  return b < a;
+}
+
+
 // ----- helpers (기존 유틸 근처에 추가) -----
 function monthGridSunday(date) {
   const y = date.getFullYear();
@@ -890,28 +909,53 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
         isNight: isNightShift,
       };
     }
-    if (label.startsWith("대")) {
-      const tType = getDayType(date, holidaySet);
-      const src =
-        tType === "평"
-          ? row.weekday
-          : tType === "토"
-          ? row.saturday
-          : row.holiday;
+if (label.startsWith("대")) {
+  const tType = getDayType(date, holidaySet);
+  const srcToday =
+    tType === "평"
+      ? row.weekday
+      : tType === "토"
+      ? row.saturday
+      : row.holiday;
 
-      // '대n' 중 숫자만 추출
-      const n = Number(label.replace(/[^0-9]/g, ""));
-      const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
+  // '대n' 숫자
+  const n = Number(label.replace(/[^0-9]/g, ""));
 
-      return {
-        in: src.in || "-",
-        out: src.out || "-",
-        note: `대근·${tType}${isNightShift ? " (야간)" : ""}`,
-        combo: tType,
-        isNight: isNightShift, // ← 야간으로 인식
-      };
-    }
+  // ✅ 야간 판정 우선순위:
+  // 1) 시간상 익일퇴근(출근 > 퇴근) 이면 무조건 야간  ← 경산 대04가 여기 걸림
+  // 2) 시간이 비어있어서 판단 못하면 기존 임계치(n >= nightDiaThreshold)로 보조 판정
+  const overnight = isOvernightByTimes(srcToday.in, srcToday.out);
+  const fallbackNight = Number.isFinite(n) && n >= nightDiaThreshold;
+  const isNightShift = overnight || (!srcToday.in || !srcToday.out ? fallbackNight : false);
+
+  // ✅ 야간이면 숫자 DIA처럼 "내일의 dayType" 기준으로 out을 잡아줌
+  let outTime = srcToday.out || "-";
+  let combo = `${tType}-${tType}`;
+
+  if (isNightShift) {
+    const tomorrow = new Date(date);
+    tomorrow.setDate(date.getDate() + 1);
+    const nextType = getDayType(tomorrow, holidaySet);
+    const srcNext =
+      nextType === "평"
+        ? row.weekday
+        : nextType === "토"
+        ? row.saturday
+        : row.holiday;
+
+    outTime = srcNext.out || outTime || "-";
+    combo = `${tType}-${nextType}`;
   }
+
+  return {
+    in: srcToday.in || "-",
+    out: outTime,
+    note: `대근·${combo}${isNightShift ? " (야간)" : ""}`,
+    combo,
+    isNight: isNightShift,
+  };
+}
+
 
   const tType = getDayType(date, holidaySet);
   const srcToday =
