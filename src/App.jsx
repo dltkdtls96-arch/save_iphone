@@ -890,28 +890,30 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
         isNight: isNightShift,
       };
     }
-    if (label.startsWith("대")) {
-      const tType = getDayType(date, holidaySet);
-      const src =
-        tType === "평"
-          ? row.weekday
-          : tType === "토"
-          ? row.saturday
-          : row.holiday;
+if (label.startsWith("대")) {
+  const tType = getDayType(date, holidaySet);
+  const src =
+    tType === "평"
+      ? row.weekday
+      : tType === "토"
+      ? row.saturday
+      : row.holiday;
 
-      // '대n' 중 숫자만 추출
-      const n = Number(label.replace(/[^0-9]/g, ""));
-      const isNightShift = Number.isFinite(n) && n >= nightDiaThreshold;
+  // ✅ '대n'은 숫자(n)로 야간 판단하면 경산 '대4'(18:00~09:00) 같은 케이스를 오판함
+  // ✅ 실제 시간(in/out)이 자정을 넘기는지로 야간 판정: in > out 이면 야간(익일 퇴근)
+  const inHM = normalizeHM(src.in);
+  const outHM = normalizeHM(src.out);
+  const isNightShift = Boolean(inHM && outHM && inHM > outHM);
 
-      return {
-        in: src.in || "-",
-        out: src.out || "-",
-        note: `대근·${tType}${isNightShift ? " (야간)" : ""}`,
-        combo: tType,
-        isNight: isNightShift, // ← 야간으로 인식
-      };
-    }
-  }
+  return {
+    in: src.in || "-",
+    out: src.out || "-",
+    note: `대근·${tType}${isNightShift ? " (야간)" : ""}`,
+    combo: tType,
+    isNight: isNightShift,
+  };
+}
+
 
   const tType = getDayType(date, holidaySet);
   const srcToday =
@@ -5229,7 +5231,7 @@ function CompareWeeklyBoard({
                             nextDia.includes("비");
                           const outIsMorning =
                             outH != null && outH <= MORNING_HOUR;
-                          isNight = nextIsBiban || outIsMorning;
+                          isNight = Boolean(t?.isNight) || nextIsBiban || outIsMorning;
                         }
 
                         const hasWork =
