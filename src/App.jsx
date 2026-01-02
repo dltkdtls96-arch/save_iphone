@@ -3509,6 +3509,8 @@ export default function App() {
                     onTouchEnd={swipeRouteP0.onEnd(goPrevDay, goNextDay)}
                     style={swipeRouteP0.style}
                   >
+                     {/*
+                     
                     <div>
                       이름: <b>{routeTarget}</b> / Dia: <b>{routeDiaLabel}</b>
                     </div>
@@ -3520,6 +3522,8 @@ export default function App() {
                       출근: <b>{startHM ?? routeIn}</b> · 퇴근:{" "}
                       <b>{endHM ?? routeOut}</b>
                     </div>
+                    
+                    */}
 
                     {/* 행로표/셔틀 이미지 */}
                     {routeShowSrc && (
