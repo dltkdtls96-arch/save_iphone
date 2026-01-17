@@ -3545,8 +3545,8 @@ export default function App() {
                                 ["월배", "문양"].includes(selectedDepot)
                                   ? "none"
                                   : selectedDepot === "경산"
-                                  ? "scale(1) translateY(7.7%)"
-                                  : "scale(1) translateY(7.7%)",
+                                  ? "scale(1) "
+                                  : "scale(1) ",
                               transformOrigin: "center center",
                             }}
                           />
