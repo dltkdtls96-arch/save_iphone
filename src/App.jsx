@@ -16,8 +16,8 @@ const SettingsView = React.lazy(() => import("./SettingsView"));
 function usePortraitOnly() {
   const getPortrait = () =>
     typeof window !== "undefined"
-      ? window.matchMedia?.("(orientation: portrait)")?.matches ??
-        window.innerHeight >= window.innerWidth
+      ? (window.matchMedia?.("(orientation: portrait)")?.matches ??
+        window.innerHeight >= window.innerWidth)
       : true;
 
   const [isPortrait, setIsPortrait] = useState(getPortrait);
@@ -296,7 +296,6 @@ const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요
 74\t이상신\t휴18\t\t\t\t\t\t\t01033473953
 75\t백상우\t휴19\t\t\t\t\t\t\t01012345678`;
 
-
 // 예: 안심 소속용
 const wolTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t송주영\t대4\t9:00\t18:00\t9:00\t18:00\t9:00\t18:00\t01012345678
@@ -375,7 +374,6 @@ const wolTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일�
 74\t장은우\t32~\t\t\t\t\t\t\t01012345678
 75\t이남석\t휴19\t\t\t\t\t\t\t01012345678`;
 
-
 const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t홍혁수\t2\t6:33\t15:08\t8:37\t16:15\t8:47\t16:31\t01012345678
 2\t홍승헌\t12\t8:24\t18:48\t9:57\t18:46\t9:41\t17:35\t01012345678
@@ -447,7 +445,6 @@ const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일
 68\t이상식\t휴17\t\t\t\t\t\t\t01012345678
 69\t손동구\t휴18\t\t\t\t\t\t\t01012345678`;
 
-
 const kyeongTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t오정호\t2\t6:33\t15:54\t6:42\t13:53\t6:34\t13:53\t01012345678
 2\t김희곤\t대03\t9:00\t18:00\t9:00\t18:00\t9:00\t18:00\t01012345678
@@ -507,7 +504,6 @@ const kyeongTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요�
 56\t송호철\t21\t15:24\t9:14\t15:41\t8:56\t15:25\t7:34\t01012345678
 57\t이상백\t21~\t\t\t\t\t\t\t01012345678
 58\t장승필\t휴15\t\t\t\t\t\t\t01012345678`;
-
 
 // App.jsx 최상단 상수/유틸 근처
 const ansimGlobs = import.meta.glob("./ansim/*.png", {
@@ -882,8 +878,8 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
         tType === "평"
           ? row.weekday
           : tType === "토"
-          ? row.saturday
-          : row.holiday;
+            ? row.saturday
+            : row.holiday;
       const isNightShift = label === "야";
       return {
         in: src.in || "-",
@@ -899,8 +895,8 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
         tType === "평"
           ? row.weekday
           : tType === "토"
-          ? row.saturday
-          : row.holiday;
+            ? row.saturday
+            : row.holiday;
 
       // '대n' 중 숫자만 추출
       const n = Number(label.replace(/[^0-9]/g, ""));
@@ -932,8 +928,8 @@ function computeInOut(row, date, holidaySet, nightDiaThreshold) {
       nextType === "평"
         ? row.weekday
         : nextType === "토"
-        ? row.saturday
-        : row.holiday;
+          ? row.saturday
+          : row.holiday;
     outTime = srcNext.out || "-";
     combo = `${tType}-${nextType}`;
     night = true;
@@ -1223,9 +1219,9 @@ export default function App() {
   const defaultAnchorMap = useMemo(
     () =>
       Object.fromEntries(
-        DEPOTS.map((d) => [d, d === "안심" ? "2025-10-01" : fmt(today)])
+        DEPOTS.map((d) => [d, d === "안심" ? "2025-10-01" : fmt(today)]),
       ),
-    [] // mount 시 1회
+    [], // mount 시 1회
   );
   const [anchorDateByDepot, setAnchorDateByDepot] = useState(defaultAnchorMap);
 
@@ -1234,7 +1230,7 @@ export default function App() {
   // Date 객체
   const anchorDate = useMemo(
     () => stripTime(new Date(anchorDateStr)),
-    [anchorDateStr]
+    [anchorDateStr],
   );
 
   // 소속별 기준일 setter
@@ -1256,24 +1252,24 @@ export default function App() {
   // 현재 소속의 테이블 텍스트
   const currentTableText = useMemo(
     () => tablesByDepot[selectedDepot] ?? defaultTableTSV,
-    [tablesByDepot, selectedDepot]
+    [tablesByDepot, selectedDepot],
   );
 
   //const peopleRows = useMemo(() => parsePeopleTable(tableText), [tableText]);
   const peopleRows = useMemo(
     () => parsePeopleTable(currentTableText),
-    [currentTableText]
+    [currentTableText],
   );
 
   // ✅ 여기에 추가
   const nameIndexMap = useMemo(
     () => buildNameIndexMap(peopleRows),
-    [peopleRows]
+    [peopleRows],
   );
 
   const nameList = useMemo(
     () => peopleRows.map((r) => r.name).filter(Boolean),
-    [peopleRows]
+    [peopleRows],
   );
 
   // 숫자 DIA별 시간 템플릿
@@ -1321,8 +1317,10 @@ export default function App() {
       else if (typeof d === "string") {
         const clean = d.replace(/\s+/g, "");
         if (/^대\d+$/i.test(clean)) set.add(clean); // 대1~대n
-        if (/^대기\d+$/i.test(clean)) set.add(clean); // 대기1~대기n  ← 추가
-        else if (clean === "비") set.add("비번"); // '비' 표기 보정
+        if (/^대기\d+$/i.test(clean))
+          set.add(clean); // 대기1~대기n  ← 추가
+        else if (clean === "비")
+          set.add("비번"); // '비' 표기 보정
         else if (["주", "야", "휴", "비번"].includes(clean)) set.add(clean);
       }
     });
@@ -1510,7 +1508,7 @@ export default function App() {
           {
             duration: 200,
             easing: "cubic-bezier(0.25, 1, 0.5, 1)",
-          }
+          },
         );
       }
     }, 150);
@@ -1580,7 +1578,7 @@ export default function App() {
       } else if (s.anchorDateStr) {
         // 구버전 호환: 모든 소속에 동일 기준일 적용
         const same = Object.fromEntries(
-          DEPOTS.map((d) => [d, s.anchorDateStr])
+          DEPOTS.map((d) => [d, s.anchorDateStr]),
         );
         setAnchorDateByDepot(same);
       }
@@ -1842,7 +1840,7 @@ export default function App() {
       .sort(
         (a, b) =>
           a.daeNum - b.daeNum ||
-          String(a.name).localeCompare(String(b.name), "ko")
+          String(a.name).localeCompare(String(b.name), "ko"),
       );
 
     const biban = entriesToday
@@ -1913,7 +1911,7 @@ export default function App() {
       .sort(
         (a, b) =>
           a.daeNum - b.daeNum ||
-          String(a.name).localeCompare(String(b.name), "ko")
+          String(a.name).localeCompare(String(b.name), "ko"),
       );
 
     const biban = entries
@@ -1973,7 +1971,7 @@ export default function App() {
         }
 
         return { name, row: { ...row, dia: displayDia } };
-      }
+      },
     );
   }, [
     nameList,
@@ -2267,7 +2265,8 @@ export default function App() {
 
       // 페이지별 허용 방향만 반영: page0 => 위로만(음수), page1 => 아래로만(양수)
       let bounded = rb;
-      if (page <= 0) bounded = Math.min(0, rb); // 첫 페이지: 위로만
+      if (page <= 0)
+        bounded = Math.min(0, rb); // 첫 페이지: 위로만
       else if (page >= MAX) bounded = Math.max(0, rb); // 마지막: 아래로만
 
       // 절대값이 패널 높이를 넘지 않도록 하드 클램프
@@ -2577,12 +2576,12 @@ export default function App() {
 
   const routeRow = React.useMemo(
     () => rowAtDateForNameWithOverride(routeTarget, selectedDate),
-    [routeTarget, selectedDate, selectedDepot]
+    [routeTarget, selectedDate, selectedDepot],
   );
 
   const routeT = React.useMemo(
     () => computeInOut(routeRow, selectedDate, holidaySet, nightDiaThreshold),
-    [routeRow, selectedDate, holidaySet, nightDiaThreshold]
+    [routeRow, selectedDate, holidaySet, nightDiaThreshold],
   );
 
   // WakeMidPanel에 줄 핵심 값
@@ -2641,6 +2640,14 @@ export default function App() {
   // 이후
   const startHM = normalizeHM(routeIn);
   const endHM = normalizeHM(routeOut);
+
+  const routeTargetPhone =
+    (tableRows || []).find((r) => (r.name ?? r["이름"]) === routeTarget)
+      ?.phone ??
+    (tableRows || []).find((r) => (r.name ?? r["이름"]) === routeTarget)?.[
+      "전화번호"
+    ] ??
+    "";
 
   // 디버그용(원하면)
   console.log("[WakeIcsPanel 전달]", { routeIn, routeOut, startHM, endHM });
@@ -2734,7 +2741,7 @@ export default function App() {
                         type="month"
                         className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
                         value={`${selectedDate.getFullYear()}-${String(
-                          selectedDate.getMonth() + 1
+                          selectedDate.getMonth() + 1,
                         ).padStart(2, "0")}`}
                         onChange={(e) => {
                           const [y, m] = e.target.value.split("-").map(Number);
@@ -2792,7 +2799,7 @@ export default function App() {
                             <option key={n} value={n}>
                               {n}
                             </option>
-                          )
+                          ),
                         )}
                       </select>
 
@@ -2824,13 +2831,13 @@ export default function App() {
                             (idx === 6
                               ? "text-blue-400" // 토요일 파랑
                               : idx === 0
-                              ? "text-red-400" // 일요일 빨강
-                              : "text-white")
+                                ? "text-red-400" // 일요일 빨강
+                                : "text-white")
                           }
                         >
                           {w}
                         </div>
-                      )
+                      ),
                     )}
                   </div>
 
@@ -2868,7 +2875,7 @@ export default function App() {
                           return last;
                         })();
                         const lastRowIndex = Math.floor(
-                          lastCellIdxOfThisMonth / 7
+                          lastCellIdxOfThisMonth / 7,
                         );
                         const actualRows = lastRowIndex + 1; // 4~6
                         //const compressLastRow = actualRows === 6;
@@ -2900,14 +2907,14 @@ export default function App() {
                               const activeName = tempName || myName;
                               const row = rowAtDateForNameWithOverride(
                                 activeName,
-                                d
+                                d,
                               );
 
                               const t = computeInOut(
                                 row,
                                 d,
                                 holidaySet,
-                                nightDiaThreshold
+                                nightDiaThreshold,
                               );
                               const diaLabel =
                                 row?.dia == null
@@ -2924,8 +2931,8 @@ export default function App() {
                                 dayType === "토"
                                   ? "text-blue-400"
                                   : dayType === "휴"
-                                  ? "text-red-400"
-                                  : "text-gray-100";
+                                    ? "text-red-400"
+                                    : "text-gray-100";
 
                               const isLastRowCompressed =
                                 compressLastRow && rowIndex === 5;
@@ -2940,7 +2947,7 @@ export default function App() {
                                 else if (label === "야")
                                   diaColorClass = "text-sky-300";
 
-// "휴" 또는 그 외는 색 없음(기본)
+                                // "휴" 또는 그 외는 색 없음(기본)
                               } else {
                                 if (typeof row?.dia === "number") {
                                   diaColorClass =
@@ -2955,14 +2962,14 @@ export default function App() {
                                   nextDate.setDate(d.getDate() + 1);
                                   const nextRow = rowAtDateForNameWithOverride(
                                     activeName,
-                                    nextDate
+                                    nextDate,
                                   );
                                   const nextDia = nextRow?.dia;
 
                                   // 다음 날 라벨에 "비번"이 있거나 "~"가 포함되면 야간으로 간주
                                   const nextDiaStr = String(nextDia || "");
-                                  const isNightTarget = 
-                                    nextDiaStr.includes("비번") || 
+                                  const isNightTarget =
+                                    nextDiaStr.includes("비번") ||
                                     nextDiaStr.includes("~");
 
                                   diaColorClass = isNightTarget
@@ -2994,7 +3001,7 @@ export default function App() {
                                           name: person,
                                         });
                                       },
-                                      LONG_MS
+                                      LONG_MS,
                                     );
                                   }}
                                   onTouchMove={(e) => {
@@ -3018,7 +3025,7 @@ export default function App() {
                                     if (lastClickedRef.current === iso2) {
                                       // 두 번 탭 → 행로표 이동
                                       setRouteTargetName(
-                                        tempName ? tempName : ""
+                                        tempName ? tempName : "",
                                       );
                                       setSelectedTab("route");
                                       setRoutePage(0);
@@ -3485,6 +3492,7 @@ export default function App() {
                   {/* 대상 이름 변경(임시) */}
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-sm text-gray-300">대상 이름</span>
+
                     <select
                       className="bg-gray-700 rounded-xl p-1 text-sm"
                       value={routeTarget}
@@ -3499,9 +3507,20 @@ export default function App() {
                           <option key={n} value={n}>
                             {n}
                           </option>
-                        )
+                        ),
                       )}
                     </select>
+
+                    {/* ✅ 전화 버튼만 */}
+                    {routeTargetPhone && (
+                      <a
+                        href={`tel:${String(routeTargetPhone).replace(/[^0-9+]/g, "")}`}
+                        className="px-2 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
+                        title="전화 걸기"
+                      >
+                        전화
+                      </a>
+                    )}
                   </div>
 
                   <div
@@ -3512,7 +3531,7 @@ export default function App() {
                     onTouchEnd={swipeRouteP0.onEnd(goPrevDay, goNextDay)}
                     style={swipeRouteP0.style}
                   >
-                     {/*
+                    {/*
                      
                     <div>
                       이름: <b>{routeTarget}</b> / Dia: <b>{routeDiaLabel}</b>
@@ -3548,12 +3567,11 @@ export default function App() {
                                 ["월배", "문양"].includes(selectedDepot)
                                   ? "none"
                                   : selectedDepot === "경산"
-                                  ? "scale(1) "
-                                  : "scale(1.3) ",
+                                    ? "scale(1) "
+                                    : "scale(1.3) ",
                               transformOrigin: "center center",
                             }}
                           />
-
 
                           <div className="absolute top-2 right-2 px-2 py-1 rounded-lg text-[10px] font-semibold bg-gray-900/80 text-white">
                             {routeShowBus ? "셔틀 시간표" : "행로표"}
@@ -4133,7 +4151,7 @@ function RosterGrid({
                 {
                   duration: 300,
                   easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-                }
+                },
               );
 
               // 🚀 애니메이션이 완전히 끝난 뒤 전환 (눈에 확실히 보임)
@@ -4205,7 +4223,7 @@ function CompareWeeklyBoard({
       const iso = fmt(stripTime(new Date(date)));
       return overridesByDepot?.[depot]?.[iso]?.[name] != null;
     },
-    [overridesByDepot]
+    [overridesByDepot],
   );
 
   const parsedByDepot = React.useMemo(() => {
@@ -4318,7 +4336,7 @@ function CompareWeeklyBoard({
       overridesByDepot,
       labelTemplates,
       diaTemplates,
-    ]
+    ],
   );
 
   /* -------------------------------------
@@ -4330,7 +4348,7 @@ function CompareWeeklyBoard({
       return myName ? [{ name: myName, depot: selectedDepot }] : [];
     }
     return compareSelected.map((x) =>
-      typeof x === "string" ? { name: x, depot: selectedDepot } : x
+      typeof x === "string" ? { name: x, depot: selectedDepot } : x,
     );
   }, [compareSelected, myName, selectedDepot]);
 
@@ -4350,8 +4368,8 @@ function CompareWeeklyBoard({
       normalized.length > 0
         ? normalized
         : myName
-        ? [{ name: myName, depot: selectedDepot }]
-        : [];
+          ? [{ name: myName, depot: selectedDepot }]
+          : [];
 
     return [
       {
@@ -4380,7 +4398,7 @@ function CompareWeeklyBoard({
 
     if (
       !window.confirm(
-        `"${activeGroup.label}" 그룹을 삭제할까요? (사람 목록 포함)`
+        `"${activeGroup.label}" 그룹을 삭제할까요? (사람 목록 포함)`,
       )
     ) {
       return;
@@ -4449,7 +4467,7 @@ function CompareWeeklyBoard({
       const target = prev[idx] || prev[0];
       const base = target.people || [];
       let nextPeople = base.filter(
-        (p) => !(p.name === name && p.depot === depot)
+        (p) => !(p.name === name && p.depot === depot),
       );
       if (nextPeople.length === 0 && myName) {
         nextPeople = [{ name: myName, depot: selectedDepot }];
@@ -4656,7 +4674,7 @@ function CompareWeeklyBoard({
         !pickedKey.has(`${pickerDepot}::${n}`) &&
         (filterText.trim()
           ? n.toLowerCase().includes(filterText.trim().toLowerCase())
-          : true)
+          : true),
     );
     return list;
   }, [parsedByDepot, pickerDepot, people, filterText]);
@@ -4670,12 +4688,12 @@ function CompareWeeklyBoard({
   const todayISO = fmt(stripTime(new Date()));
   const isCurrentWeekHasToday = React.useMemo(
     () => displayedWeekDays.some((d) => fmt(d) === todayISO),
-    [displayedWeekDays, todayISO]
+    [displayedWeekDays, todayISO],
   );
 
   const isTodayCell = React.useCallback(
     (d) => isCurrentWeekHasToday && fmt(d) === todayISO,
-    [isCurrentWeekHasToday, todayISO]
+    [isCurrentWeekHasToday, todayISO],
   );
 
   // 오늘 컬럼 인덱스(헤더+바디 오버레이용)
@@ -4686,7 +4704,7 @@ function CompareWeeklyBoard({
 
   // 헤더 월 라벨
   const monthLabel = `${selectedDate.getFullYear()}.${String(
-    selectedDate.getMonth() + 1
+    selectedDate.getMonth() + 1,
   ).padStart(2, "0")}`;
 
   // 유틸 함수들
@@ -4775,7 +4793,7 @@ function CompareWeeklyBoard({
             type="month"
             className="bg-gray-900/70 border border-gray-800 rounded-lg px-2 py-1 text-xs text-gray-100"
             value={`${selectedDate.getFullYear()}-${String(
-              selectedDate.getMonth() + 1
+              selectedDate.getMonth() + 1,
             ).padStart(2, "0")}`}
             onChange={(e) => {
               const v = e.target.value; // "YYYY-MM"
@@ -4863,7 +4881,7 @@ function CompareWeeklyBoard({
                 type="month"
                 className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
                 value={`${selectedDate.getFullYear()}-${String(
-                  selectedDate.getMonth() + 1
+                  selectedDate.getMonth() + 1,
                 ).padStart(2, "0")}`}
                 onChange={(e) => {
                   const v = e.target.value; // "YYYY-MM"
@@ -4918,7 +4936,7 @@ function CompareWeeklyBoard({
                   setGroups((prev) => {
                     // 🔹 이미 쓰인 "그룹 N"들 모으기
                     const used = new Set(
-                      prev.map((g) => g.label).filter(Boolean)
+                      prev.map((g) => g.label).filter(Boolean),
                     );
 
                     // 🔹 안 쓰인 번호 찾기 (그룹 1, 그룹 2, …)
@@ -4983,8 +5001,8 @@ function CompareWeeklyBoard({
                       prev.map((g) =>
                         g.id === editingGroupId
                           ? { ...g, label: trimmed || g.label }
-                          : g
-                      )
+                          : g,
+                      ),
                     );
                     setEditingGroupId(null);
                     setEditingLabel("");
@@ -5003,8 +5021,8 @@ function CompareWeeklyBoard({
                     prev.map((g) =>
                       g.id === editingGroupId
                         ? { ...g, label: trimmed || g.label }
-                        : g
-                    )
+                        : g,
+                    ),
                   );
                   setEditingGroupId(null);
                   setEditingLabel("");
@@ -5108,8 +5126,8 @@ function CompareWeeklyBoard({
                 dow === 0
                   ? "text-red-400"
                   : dow === 6
-                  ? "text-blue-400"
-                  : "text-gray-100";
+                    ? "text-blue-400"
+                    : "text-gray-100";
               return (
                 <div
                   key={iso}
@@ -5185,7 +5203,7 @@ function CompareWeeklyBoard({
                         row,
                         d,
                         holidaySet,
-                        nightDiaThreshold
+                        nightDiaThreshold,
                       );
 
                       // 원래 DIA 라벨
@@ -5193,8 +5211,8 @@ function CompareWeeklyBoard({
                         row?.dia === undefined
                           ? "-"
                           : typeof row.dia === "number"
-                          ? row.dia
-                          : String(row.dia).replace(/\s+/g, "");
+                            ? row.dia
+                            : String(row.dia).replace(/\s+/g, "");
 
                       // 화면 표시용 라벨
                       const diaLabel =
@@ -5223,7 +5241,7 @@ function CompareWeeklyBoard({
                       const todayDia = norm(row?.dia);
                       const nextDay = addDaysSafe(d, 1);
                       const nextDia = norm(
-                        rowAtDateFor(name, depot, nextDay)?.dia
+                        rowAtDateFor(name, depot, nextDay)?.dia,
                       );
 
                       if (isOffDia(todayDia)) {
@@ -5266,7 +5284,7 @@ function CompareWeeklyBoard({
                             outside ? "opacity-50" : ""
                           }`}
                           title={`${depot} • ${name} • ${fmtWithWeekday(
-                            d
+                            d,
                           )} • DIA ${dia} / ${t.in}~${t.out}`}
                         >
                           <div className="font-semibold">{finalLabel}</div>
@@ -5319,7 +5337,7 @@ function DiaOrderSections({ diaViewData, nightDiaThreshold }) {
             const tag = prevNightTag(
               e.yDiaNum,
               e.yPrevLabel,
-              nightDiaThreshold
+              nightDiaThreshold,
             );
             const isPrevNight = tag !== "비번";
 
@@ -5445,7 +5463,7 @@ function FixedTabbarPortal({ children }) {
   return mountRef.current
     ? createPortal(
         <div style={{ pointerEvents: "auto" }}>{children}</div>,
-        mountRef.current
+        mountRef.current,
       )
     : null;
 }
