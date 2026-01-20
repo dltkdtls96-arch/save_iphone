@@ -296,7 +296,6 @@ const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요
 74\t이상신\t휴18\t\t\t\t\t\t\t01033473953
 75\t백상우\t휴19\t\t\t\t\t\t\t01012345678`;
 
-
 // 예: 안심 소속용
 const wolTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t송주영\t대4\t9:00\t18:00\t9:00\t18:00\t9:00\t18:00\t01012345678
@@ -375,7 +374,6 @@ const wolTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일�
 74\t장은우\t32~\t\t\t\t\t\t\t01012345678
 75\t이남석\t휴19\t\t\t\t\t\t\t01012345678`;
 
-
 const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t홍혁수\t2\t6:33\t15:08\t8:37\t16:15\t8:47\t16:31\t01012345678
 2\t홍승헌\t12\t8:24\t18:48\t9:57\t18:46\t9:41\t17:35\t01012345678
@@ -447,7 +445,6 @@ const moonTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일
 68\t이상식\t휴17\t\t\t\t\t\t\t01012345678
 69\t손동구\t휴18\t\t\t\t\t\t\t01012345678`;
 
-
 const kyeongTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t오정호\t2\t6:33\t15:54\t6:42\t13:53\t6:34\t13:53\t01012345678
 2\t김희곤\t대03\t9:00\t18:00\t9:00\t18:00\t9:00\t18:00\t01012345678
@@ -507,7 +504,6 @@ const kyeongTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요�
 56\t송호철\t21\t15:24\t9:14\t15:41\t8:56\t15:25\t7:34\t01012345678
 57\t이상백\t21~\t\t\t\t\t\t\t01012345678
 58\t장승필\t휴15\t\t\t\t\t\t\t01012345678`;
-
 
 // App.jsx 최상단 상수/유틸 근처
 const ansimGlobs = import.meta.glob("./ansim/*.png", {
@@ -821,6 +817,14 @@ function parsePeopleTable(text) {
   const iSaOut = idx("토요일퇴근");
   const iHoIn = idx("휴일출근");
   const iHoOut = idx("휴일퇴근");
+  const iPhone =
+    idx("전화번호") >= 0
+      ? idx("전화번호")
+      : idx("전화") >= 0
+      ? idx("전화")
+      : idx("휴대폰") >= 0
+      ? idx("휴대폰")
+      : idx("phone");
 
   const rows = [];
   for (let r = 1; r < lines.length; r++) {
@@ -831,6 +835,7 @@ function parsePeopleTable(text) {
       seq: (cols[iSeq] || "").trim(),
       name: (cols[iName] || "").trim(),
       dia,
+      phone: iPhone >= 0 ? (cols[iPhone] || "").trim() : "", // ✅ 추가
       weekday: {
         in: (cols[iWdIn] || "").trim(),
         out: (cols[iWdOut] || "").trim(),
@@ -2642,6 +2647,12 @@ export default function App() {
   const startHM = normalizeHM(routeIn);
   const endHM = normalizeHM(routeOut);
 
+  const routeTargetPhone = React.useMemo(() => {
+    const p =
+      (peopleRows || []).find((r) => r.name === routeTarget)?.phone || "";
+    return String(p).trim();
+  }, [peopleRows, routeTarget]);
+
   // 디버그용(원하면)
   console.log("[WakeIcsPanel 전달]", { routeIn, routeOut, startHM, endHM });
 
@@ -2940,7 +2951,7 @@ export default function App() {
                                 else if (label === "야")
                                   diaColorClass = "text-sky-300";
 
-// "휴" 또는 그 외는 색 없음(기본)
+                                // "휴" 또는 그 외는 색 없음(기본)
                               } else {
                                 if (typeof row?.dia === "number") {
                                   diaColorClass =
@@ -2961,8 +2972,8 @@ export default function App() {
 
                                   // 다음 날 라벨에 "비번"이 있거나 "~"가 포함되면 야간으로 간주
                                   const nextDiaStr = String(nextDia || "");
-                                  const isNightTarget = 
-                                    nextDiaStr.includes("비번") || 
+                                  const isNightTarget =
+                                    nextDiaStr.includes("비번") ||
                                     nextDiaStr.includes("~");
 
                                   diaColorClass = isNightTarget
@@ -3504,6 +3515,29 @@ export default function App() {
                     </select>
                   </div>
 
+                  {/* ✅ 전화번호(누르면 전화) */}
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-xs text-gray-400">전화번호</span>
+
+                    {routeTargetPhone ? (
+                      <a
+                        href={`tel:${String(routeTargetPhone).replace(
+                          /[^0-9+]/g,
+                          ""
+                        )}`}
+                        className="text-xs px-2 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white"
+                        title="전화 걸기"
+                        // 스와이프/제스처 영역에서 클릭 씹히는 거 방지용
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {routeTargetPhone}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-gray-500">번호없음</span>
+                    )}
+                  </div>
+
                   <div
                     className="p-3 rounded-xl bg-gray-900/60 text-sm mt-3"
                     ref={swipeRouteP0.ref}
@@ -3512,7 +3546,7 @@ export default function App() {
                     onTouchEnd={swipeRouteP0.onEnd(goPrevDay, goNextDay)}
                     style={swipeRouteP0.style}
                   >
-                     {/*
+                    {/*
                      
                     <div>
                       이름: <b>{routeTarget}</b> / Dia: <b>{routeDiaLabel}</b>
@@ -3553,7 +3587,6 @@ export default function App() {
                               transformOrigin: "center center",
                             }}
                           />
-
 
                           <div className="absolute top-2 right-2 px-2 py-1 rounded-lg text-[10px] font-semibold bg-gray-900/80 text-white">
                             {routeShowBus ? "셔틀 시간표" : "행로표"}
