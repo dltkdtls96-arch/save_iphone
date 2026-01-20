@@ -99,7 +99,7 @@ import {
 // /project/workspace/src/App.jsx
 
 const STORAGE_KEY = "workCalendarSettingsV3"; // 기존이 V3였다면 버전 한번 올려
-const DATA_VERSION = 9; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
+const DATA_VERSION = 10; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
 
 // 소속 정규화 (월배/월베/wol 다 월배로)
 const normalizeDepot = (v = "") => {
@@ -3192,18 +3192,28 @@ export default function App() {
                     <button
                       className="rounded-full px-3 py-1 text-sm bg-cyan-600 text-white"
                       onClick={() =>
-                        setOrderMode((m) => (m === "person" ? "dia" : "person"))
+                        setOrderMode((m) =>
+                          m === "person"
+                            ? "dia"
+                            : m === "dia"
+                            ? "name"
+                            : "person"
+                        )
                       }
-                      aria-pressed={orderMode === "dia"}
+                      aria-pressed={orderMode !== "person"}
                       title={
-                        orderMode === "dia"
-                          ? "순번으로 보기"
-                          : "DIA 순서로 보기"
+                        orderMode === "person"
+                          ? "DIA 순서로 보기"
+                          : orderMode === "dia"
+                          ? "이름순으로 보기"
+                          : "순번으로 보기"
                       }
                     >
-                      {orderMode === "dia"
-                        ? "순번으로 보기"
-                        : "DIA 순서로 보기"}
+                      {orderMode === "person"
+                        ? "DIA 순서로 보기"
+                        : orderMode === "dia"
+                        ? "이름순으로 보기"
+                        : "순번으로 보기"}
                     </button>
                   </div>
 
@@ -3260,6 +3270,29 @@ export default function App() {
                       }
                     />
                   )}
+                  {orderMode === "name" && (
+  <RosterGrid
+    rows={nameGridRows}
+    holidaySet={holidaySet}
+    date={selectedDate}
+    nightDiaThreshold={nightDiaThreshold}
+    highlightMap={highlightMap}
+    onPick={(name) => {
+      setRouteTargetName(name);
+      triggerRouteTransition();
+    }}
+    selectedDepot={selectedDepot}
+    daySwipe={{
+      ref: swipeRosterP0.ref,
+      onStart: swipeRosterP0.onStart,
+      onMove: swipeRosterP0.onMove,
+      onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+      style: swipeRosterP0.style,
+    }}
+    isOverridden={(name, d) => hasOverride(selectedDepot, d, name)}
+  />
+)}
+
                 </div>
               </div>
             </div>
@@ -3405,6 +3438,31 @@ export default function App() {
                   }
                 />
               )}
+
+{orderMode === "name" && (
+  <RosterGrid
+    rows={nameGridRows}
+    holidaySet={holidaySet}
+    date={selectedDate}
+    nightDiaThreshold={nightDiaThreshold}
+    highlightMap={highlightMap}
+    onPick={(name) => {
+      setRouteTargetName(name);
+      triggerRouteTransition();
+    }}
+    selectedDepot={selectedDepot}
+    daySwipe={{
+      ref: swipeRosterP0.ref,
+      onStart: swipeRosterP0.onStart,
+      onMove: swipeRosterP0.onMove,
+      onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+      style: swipeRosterP0.style,
+    }}
+    isOverridden={(name, d) => hasOverride(selectedDepot, d, name)}
+  />
+)}
+
+
             </div>
           )}
 
@@ -3772,6 +3830,29 @@ export default function App() {
                       }
                     />
                   )}
+                  {orderMode === "name" && (
+  <RosterGrid
+    rows={nameGridRows}
+    holidaySet={holidaySet}
+    date={selectedDate}
+    nightDiaThreshold={nightDiaThreshold}
+    highlightMap={highlightMap}
+    onPick={(name) => {
+      setRouteTargetName(name);
+      triggerRouteTransition();
+    }}
+    selectedDepot={selectedDepot}
+    daySwipe={{
+      ref: swipeRosterP0.ref,
+      onStart: swipeRosterP0.onStart,
+      onMove: swipeRosterP0.onMove,
+      onEnd: swipeRosterP0.onEnd(goPrevDay, goNextDay),
+      style: swipeRosterP0.style,
+    }}
+    isOverridden={(name, d) => hasOverride(selectedDepot, d, name)}
+  />
+)}
+
                 </div>
                 {/* Panel 2: 알람/일정(WakeIcsPanel) */}
                 <div
