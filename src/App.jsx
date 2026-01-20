@@ -1887,8 +1887,12 @@ export default function App() {
 
       if (typeof todayDia === "string") {
         const clean = todayDia.replace(/\s/g, "");
+
         if (clean.startsWith("휴")) {
           type = "holiday";
+        } else if (clean.endsWith("~")) {
+          // ✅ "26~", "대6~" 는 비번 취급
+          type = "biban";
         } else if (clean.includes("비번") || clean === "비") {
           type = "biban";
         } else if (/^대\d+$/i.test(clean)) {
