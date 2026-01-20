@@ -3546,7 +3546,7 @@ export default function App() {
                                   ? "none"
                                   : selectedDepot === "경산"
                                   ? "scale(1) "
-                                  : "scale(1) ",
+                                  : "scale(1.5) ",
                               transformOrigin: "center center",
                             }}
                           />
