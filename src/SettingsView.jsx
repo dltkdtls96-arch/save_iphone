@@ -61,7 +61,7 @@ export default function SettingsView(props) {
 
     // 기준일 자동 설정
     const defaultAnchorByDepot = {
-      문양: "2025-10-01",
+      문양: "2026-01-21",
       월배: "2025-11-01",
       안심: "2025-10-01",
       교대: "2025-09-29",
@@ -186,7 +186,7 @@ export default function SettingsView(props) {
 
               {selectedDepot === "문양" && (
                 <span className="text-xs text-amber-300">
-                  문양은 10월 1일로 하세요
+                  문양은 1월 21일로 하세요
                 </span>
               )}
 
