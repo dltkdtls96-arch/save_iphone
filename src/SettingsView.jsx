@@ -62,7 +62,7 @@ export default function SettingsView(props) {
     // 기준일 자동 설정
     const defaultAnchorByDepot = {
       문양: "2026-01-21",
-      월배: "2025-11-01",
+      월배: "2026-03-01",
       안심: "2025-10-01",
       교대: "2025-09-29",
       경산: "2025-12-28",
