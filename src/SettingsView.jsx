@@ -172,7 +172,7 @@ export default function SettingsView(props) {
                 {/* ✅ 안심 선택 시 안내 문구 */}
                 {selectedDepot === "안심" && (
                   <span className="text-xs text-amber-300">
-                    안심은 10월 1일로 하세요
+                   {/* 안심은 10월 1일로 하세요*/}
                   </span>
                 )}
 
@@ -186,13 +186,13 @@ export default function SettingsView(props) {
 
               {selectedDepot === "문양" && (
                 <span className="text-xs text-amber-300">
-                  문양은 1월 21일로 하세요
+                  {/*문양은 1월 21일로 하세요*/}
                 </span>
               )}
 
               {selectedDepot === "월배" && (
                 <span className="text-xs text-amber-300">
-                  월배은 11월 1일로 하세요
+                  {/*월배은 11월 1일로 하세요*/}
                 </span>
               )}
 
