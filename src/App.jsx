@@ -99,7 +99,7 @@ import {
 // /project/workspace/src/App.jsx
 
 const STORAGE_KEY = "workCalendarSettingsV3"; // 기존이 V3였다면 버전 한번 올려
-const DATA_VERSION = 15; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
+const DATA_VERSION = 16; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
 
 // 소속 정규화 (월배/월베/wol 다 월배로)
 const normalizeDepot = (v = "") => {
@@ -225,26 +225,17 @@ function buildGyodaeExtTable() {
 
   const D_IN = "07:30", D_OUT = "19:00";
   const N_IN = "18:30", N_OUT = "08:00";
-  const PATTERN = ["주", "주", "야", "야", "비", "휴"];
 
-  const crews = [
-    { name: "A조", offset: 0 },
-    { name: "B조", offset: 2 },
-    { name: "C조", offset: 4 },
+  const rows = [
+    [1, "A조", "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [2, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [3, "B조", "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [4, "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [5, "C조", "비", "", "", "", "", "", ""],
+    [6, "",    "휴", "", "", "", "", "", ""],
   ];
 
-  const rows = [];
-  for (const crew of crews) {        // ← 조 먼저
-    for (let i = 0; i < 6; i++) {   // ← 그 다음 6일
-      const dia = PATTERN[(crew.offset + i) % 6];
-      let t = ["", "", "", "", "", ""];
-      if (dia === "주") t = [D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT];
-      if (dia === "야") t = [N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT];
-      rows.push([rows.length + 1, crew.name, dia, ...t].join("\t"));
-    }
-  }
-
-  return [header, ...rows].join("\n");
+  return [header, ...rows.map(r => r.join("\t"))].join("\n");
 }
 
 const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
