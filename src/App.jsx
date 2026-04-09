@@ -227,17 +227,20 @@ function buildGyodaeExtTable() {
   const N_IN = "18:30", N_OUT = "08:00";
   const PATTERN = ["주", "주", "야", "야", "비", "휴"];
 
-  // 5/1 기준: A=주1(0), B=야1(2), C=비(4)
-  const OFFSET = { A조: 0, B조: 2, C조: 4 };
+  const crews = [
+    { name: "A조", offset: 0 },
+    { name: "B조", offset: 2 },
+    { name: "C조", offset: 4 },
+  ];
 
   const rows = [];
-  for (let day = 0; day < 6; day++) {
-    for (const [name, offset] of Object.entries(OFFSET)) {
-      const dia = PATTERN[(offset + day) % 6];
+  for (const crew of crews) {        // ← 조 먼저
+    for (let i = 0; i < 6; i++) {   // ← 그 다음 6일
+      const dia = PATTERN[(crew.offset + i) % 6];
       let t = ["", "", "", "", "", ""];
       if (dia === "주") t = [D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT];
       if (dia === "야") t = [N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT];
-      rows.push([rows.length + 1, name, dia, ...t].join("\t"));
+      rows.push([rows.length + 1, crew.name, dia, ...t].join("\t"));
     }
   }
 
