@@ -140,7 +140,7 @@ function prevNightTag(yDiaNum, yPrevLabel, threshold) {
 }
 
 // 소속(차고/센터)
-const DEPOTS = ["안심", "월배", "경산", "문양", "교대"];
+const DEPOTS = ["안심", "월배", "경산", "문양", "교대","교대(외)"];
 
 // 숫자 DIA만 정수로, 아니면 NaN
 const toDiaNum = (dia) => {
@@ -218,6 +218,38 @@ function buildGyodaeTable() {
 
   return [header, ...rows].join("\n");
 }
+
+function buildGyodaeExtTable() {
+  const header =
+    "순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근";
+
+  const D_IN = "07:30", D_OUT = "19:00";
+  const N_IN = "18:30", N_OUT = "08:00";
+
+  const rows = [
+    [1,  "A조", "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [2,  "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [3,  "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [4,  "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [5,  "",    "비", "", "", "", "", "", ""],
+    [6,  "",    "휴", "", "", "", "", "", ""],
+    [7,  "B조", "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [8,  "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [9,  "",    "비", "", "", "", "", "", ""],
+    [10, "",    "휴", "", "", "", "", "", ""],
+    [11, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [12, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [13, "C조", "비", "", "", "", "", "", ""],
+    [14, "",    "휴", "", "", "", "", "", ""],
+    [15, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [16, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
+    [17, "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+    [18, "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
+  ];
+
+  return [header, ...rows.map(r => r.join("\t"))].join("\n");
+}
+
 
 const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t이창민\t4\t6:43\t15:23\t6:55\t16:37\tS4\t\t01088446414
@@ -537,6 +569,7 @@ const defaultAnchorByDepot = {
   안심: "2025-10-01",
   경산: "2025-10-01",
   교대: "2025-09-29",
+  "교대(외)": "2025-05-01",
 };
 
 function getRouteImageSrc(key, depot) {
@@ -1254,6 +1287,7 @@ export default function App() {
     경산: kyeongTableTSV,
     문양: moonTableTSV,
     교대: buildGyodaeTable(), // ⬅️ new
+    "교대(외)": buildGyodaeExtTable(),
   });
 
   // 데이터/이름 목록
