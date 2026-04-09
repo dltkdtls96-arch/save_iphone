@@ -225,31 +225,24 @@ function buildGyodaeExtTable() {
 
   const D_IN = "07:30", D_OUT = "19:00";
   const N_IN = "18:30", N_OUT = "08:00";
+  const PATTERN = ["주", "주", "야", "야", "비", "휴"];
 
-  const rows = [
-    [1,  "A조", "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
-    [2,  "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
-    [3,  "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
-    [4,  "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
-    [5,  "",    "비", "", "", "", "", "", ""],
-    [6,  "",    "휴", "", "", "", "", "", ""],
-    [7,  "B조", "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
-    [8,  "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
-    [9,  "",    "비", "", "", "", "", "", ""],
-    [10, "",    "휴", "", "", "", "", "", ""],
-    [11, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
-    [12, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
-    [13, "C조", "비", "", "", "", "", "", ""],
-    [14, "",    "휴", "", "", "", "", "", ""],
-    [15, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
-    [16, "",    "주", D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT],
-    [17, "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
-    [18, "",    "야", N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT],
-  ];
+  // 5/1 기준: A=주1(0), B=야1(2), C=비(4)
+  const OFFSET = { A조: 0, B조: 2, C조: 4 };
 
-  return [header, ...rows.map(r => r.join("\t"))].join("\n");
+  const rows = [];
+  for (let day = 0; day < 6; day++) {
+    for (const [name, offset] of Object.entries(OFFSET)) {
+      const dia = PATTERN[(offset + day) % 6];
+      let t = ["", "", "", "", "", ""];
+      if (dia === "주") t = [D_IN, D_OUT, D_IN, D_OUT, D_IN, D_OUT];
+      if (dia === "야") t = [N_IN, N_OUT, N_IN, N_OUT, N_IN, N_OUT];
+      rows.push([rows.length + 1, name, dia, ...t].join("\t"));
+    }
+  }
+
+  return [header, ...rows].join("\n");
 }
-
 
 const defaultTableTSV = `순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근\t전화번호
 1\t이창민\t4\t6:43\t15:23\t6:55\t16:37\tS4\t\t01088446414
