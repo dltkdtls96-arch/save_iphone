@@ -2679,6 +2679,7 @@ export default function App() {
     경산: "/bus/line2.png",
     문양: "/bus/line2.png",
     교대: "/bus/line2.png",
+    "교대(외)": "/bus/line2.png",
   };
 
   // ✅ altView 지원: 안심·월배만
