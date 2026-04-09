@@ -99,7 +99,7 @@ import {
 // /project/workspace/src/App.jsx
 
 const STORAGE_KEY = "workCalendarSettingsV3"; // 기존이 V3였다면 버전 한번 올려
-const DATA_VERSION = 14; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
+const DATA_VERSION = 15; // 🔹 사람테이블/행로표 구조 바꾸면 2,3.. 이렇게 숫자 올리기
 
 // 소속 정규화 (월배/월베/wol 다 월배로)
 const normalizeDepot = (v = "") => {
