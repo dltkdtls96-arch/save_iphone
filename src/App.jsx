@@ -1385,6 +1385,7 @@ export default function App() {
     경산: "",
     문양: "",
     교대: "", // ⬅️ new (원하면 "갑반"으로 기본값 넣어도 됩니다)
+    "교대(외)": "",
   });
   const myName = myNameMap[selectedDepot] || "";
   const setMyNameForDepot = (depot, name) =>
@@ -1439,6 +1440,7 @@ export default function App() {
     경산: 5,
     문양: 5,
     교대: 5, // ⬅️ new (교대는 '야/휴'가 문자열이라 임계치 영향은 사실상 없음)
+    "교대(외)": 5,
   });
   // 선택된 소속의 야간 기준값 (기존 nightDiaThreshold 대체)
   const nightDiaThreshold = nightDiaByDepot[selectedDepot] ?? 25;
@@ -2479,6 +2481,7 @@ export default function App() {
       경산: kyeongTableTSV,
       문양: moonTableTSV,
       교대: buildGyodaeTable(),
+      "교대(외)": buildGyodaeExtTable(),  // ← 추가
     });
 
     // ✅ 소속별 내 이름 리셋
@@ -2488,6 +2491,7 @@ export default function App() {
       경산: "",
       문양: "",
       교대: "",
+      "교대(외)": "",
     });
 
     // ✅ 소속별 야간 DIA 기준 리셋
@@ -2498,6 +2502,8 @@ export default function App() {
       문양: 24,
       경산: 21,
       교대: 5,
+      "교대(외)": 5,
+      
     });
 
     // ✅ 기타 상태들 리셋
@@ -5414,7 +5420,7 @@ function CompareWeeklyBoard({
                         const outH = hourFromStr(t.out);
                         let isNight = false;
 
-                        if (depot === "교대") {
+                        if (depot === "교대"|| depot === "교대(외)") {
                           isNight =
                             todayDia === "야" &&
                             typeof nextDia === "string" &&
