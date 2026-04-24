@@ -1044,7 +1044,13 @@ export default function App() {
         const s = String(wt || "").replace(/\s/g, "");
         if (!s || s === "----") return { in: "", out: "" };
         const parts = s.split("-");
-        return { in: parts[0] || "", out: parts[1] || "" };
+        const start = parts[0] || "";
+        const end = parts[1] || "";
+        // S코드 보정: 출근이 s[1-6]이면 퇴근도 동일하게
+        if (/^s[1-6]$/i.test(start)) {
+          return { in: start, out: start };
+        }
+        return { in: start, out: end };
       };
       const wtFor = (code) => {
         const k = String(code || "")
@@ -4139,7 +4145,13 @@ function CompareWeeklyBoard({
           const s = String(wt || "").replace(/\s/g, "");
           if (!s || s === "----") return { in: "", out: "" };
           const parts = s.split("-");
-          return { in: parts[0] || "", out: parts[1] || "" };
+          const start = parts[0] || "";
+          const end = parts[1] || "";
+          // S코드 보정: 출근이 s[1-6]이면 퇴근도 동일하게
+          if (/^s[1-6]$/i.test(start)) {
+            return { in: start, out: start };
+          }
+          return { in: start, out: end };
         };
         const wtFor = (code) => {
           const k = String(code || "")
