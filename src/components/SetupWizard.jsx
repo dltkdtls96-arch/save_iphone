@@ -51,9 +51,7 @@ const ALL_DEPOTS = ["안심", "월배", "경산", "문양"];
 // ⭐ 통합 교번 데이터 ZIP 다운로드 URL
 // (4개 소속 통합본 — 안심/월배/경산/문양)
 // TODO: 데이터가 업데이트되면 이 URL만 바꾸면 됨
-const DATA_DOWNLOAD_URL =
-  "https://github.com/dltkdtls96-arch/Test_Save_Iphone/releases/latest/download/GB_data_2호선AI다이아.zip";
-
+const DATA_DOWNLOAD_URL = "/data/GB_data.zip";
 // 오늘 날짜 (로컬)
 function todayStr() {
   const d = new Date();
