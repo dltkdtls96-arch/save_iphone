@@ -17,8 +17,17 @@ import {
   rebaseDepotToToday,
   resetAllStorage,
   repairCommonMapFromZipBlob,
+  normalizeCommonWorktime,
+  fetchKoreanHolidaysDetailed,
 } from "./dataEngine";
 import SetupWizard from "./components/SetupWizard";
+import { buildTemplates, applyOverride } from "./overrideEngine";
+import {
+  KR_HOLIDAYS,
+  HOLIDAY_DEFAULTS_VERSION,
+  HOLIDAY_ADDED_BY_VERSION,
+  mergeHolidayText,
+} from "./holidays";
 import PersonEditModal from "./components/PersonEditModal";
 import { RouteImageView, tsvDiaToRouteCode } from "./components/routeImage";
 
@@ -217,6 +226,44 @@ function stripTime(d) {
   x.setHours(0, 0, 0, 0);
   return x;
 }
+// "YYYY-MM-DD" → 로컬 자정 Date (형식이 틀리면 null)
+//  · <input type="date"> 를 비우면 "" 가 들어오는데, new Date("") 는
+//    Invalid Date 라서 fmt() 에서 RangeError → 앱 전체가 하얗게 죽었음.
+function parseYMD(v) {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v ?? "").trim());
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d.getTime()) ? null : d;
+}
+const TSV_HEADER =
+  "순번\t이름\tdia\t평일출근\t평일퇴근\t토요일출근\t토요일퇴근\t휴일출근\t휴일퇴근";
+// 오늘로 재배치된 ZIP commonMap → TSV 사본 (IndexedDB 유실 시 폴백용)
+function commonToTsv(c) {
+  if (!c?.names?.length || !c?.gyobun?.length) return "";
+  const rows = c.names.map((name, i) => {
+    const code = c.gyobun[i] || "";
+    const k = code.toLowerCase();
+    const sp = (wt) => String(wt || "----").replace(/\s+/g, "").split("-");
+    const [a1, a2] = sp(c.worktime?.nor?.[k]);
+    const [b1, b2] = sp(c.worktime?.sat?.[k]);
+    const [h1, h2] = sp(c.worktime?.hol?.[k]);
+    return [i + 1, name, code.replace(/d$/i, ""), a1 || "", a2 || "", b1 || "", b2 || "", h1 || "", h2 || ""].join("\t");
+  });
+  return [TSV_HEADER, ...rows].join("\n");
+}
+
+// 기준일에 baseName 이 baseCode 교번을 받도록 하는 자리 보정값
+function calcSeatShift(common) {
+  if (!common?.names?.length || !common?.gyobun?.length) return 0;
+  const norm = (x) => String(x || "").replace(/\s+/g, "").toLowerCase();
+  const bn = common.baseName
+    ? common.names.findIndex((n) => norm(n) === norm(common.baseName))
+    : -1;
+  const bc = common.baseCode
+    ? common.gyobun.findIndex((c) => norm(c) === norm(common.baseCode))
+    : -1;
+  return bn >= 0 && bc >= 0 ? bc - bn : 0;
+}
 function diffDays(a, b) {
   return Math.floor((stripTime(a) - stripTime(b)) / 86400000);
 }
@@ -273,41 +320,7 @@ function monthGridMonday(selectedDate) {
   return days;
 }
 
-const DEFAULT_HOLIDAYS_25_26 = `2025-01-01
-2025-01-28
-2025-01-29
-2025-01-30
-2025-03-01
-2025-03-03
-2025-05-05
-2025-06-06
-2025-08-15
-2025-10-03
-2025-10-05
-2025-10-06
-2025-10-07
-2025-10-09
-2025-12-25
-2026-01-01
-2026-02-16
-2026-02-17
-2026-02-18
-2026-03-01
-2026-03-02
-2026-05-05
-2026-05-24
-2026-05-25
-2026-06-06
-2026-08-15
-2026-08-17
-2026-09-24
-2026-09-25
-2026-09-26
-2026-09-27
-2026-10-03
-2026-10-05
-2026-10-09
-2026-12-25`.trim();
+const DEFAULT_HOLIDAYS_25_26 = KR_HOLIDAYS.join("\n");
 
 function getDayType(date, holidaySet) {
   const dow = date.getDay();
@@ -594,8 +607,31 @@ export default function App() {
 
   const [selectedTab, setSelectedTab] = useState("home");
   const [orderMode, setOrderMode] = useState("person");
-  const today = stripTime(new Date());
+  // "오늘" — 앱을 켜둔 채 자정을 넘기거나, 다음날 백그라운드에서 돌아와도
+  // 갱신되도록 상태로 관리 (이전엔 렌더될 때만 바뀌어서 하루가 밀려 보였음)
+  const [todayKey, setTodayKey] = useState(() => fmt(stripTime(new Date())));
+  const today = useMemo(() => parseYMD(todayKey), [todayKey]);
   const [selectedDate, setSelectedDate] = useState(today);
+  const todayKeyRef = React.useRef(todayKey);
+  useEffect(() => {
+    const check = () => {
+      const k = fmt(stripTime(new Date()));
+      const prev = todayKeyRef.current;
+      if (k === prev) return;
+      todayKeyRef.current = k;
+      setTodayKey(k);
+      // 어제를 "오늘"로 보고 있던 경우에만 새 오늘로 이동
+      setSelectedDate((sd) => (fmt(sd) === prev ? parseYMD(k) : sd));
+    };
+    const id = setInterval(check, 30000);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, []);
 
   const goPrevDay = () => {
     flushSync(() => setSelectedDate((d) => addDaysSafe(d, -1)));
@@ -657,90 +693,7 @@ export default function App() {
   function applyOverrideToRow(row, depot, dateObj, name) {
     const iso = fmt(stripTime(new Date(dateObj)));
     const vRaw = overridesByDepot?.[depot]?.[iso]?.[name];
-    if (vRaw == null || vRaw === "") return row;
-
-    // 값 정규화: 공백 제거
-    const v = String(vRaw).replace(/\s+/g, "");
-
-    const patched = { ...(row || {}) };
-    const applyTemplate = (tpl) => {
-      if (!tpl) return;
-      patched.weekday = { ...tpl.weekday };
-      patched.saturday = { ...tpl.saturday };
-      patched.holiday = { ...tpl.holiday };
-      // 🌙 야간 퇴근 시간 계산을 위한 다음 자리 worktime 도 함께 교체
-      if (tpl.weekdayNext) patched.weekdayNext = { ...tpl.weekdayNext };
-      if (tpl.saturdayNext) patched.saturdayNext = { ...tpl.saturdayNext };
-      if (tpl.holidayNext) patched.holidayNext = { ...tpl.holidayNext };
-    };
-
-    // 1) 휴/비번/비/교육/휴가
-    if (
-      v === "휴" ||
-      v === "비번" ||
-      v === "비" ||
-      v === "교육" ||
-      v === "휴가"
-    ) {
-      const key = v === "비" ? "비번" : v;
-      patched.dia = key;
-      applyTemplate(labelTemplates[key]);
-      return patched;
-    }
-
-    // 2) 주/야
-    if (v === "주" || v === "야") {
-      patched.dia = v;
-      applyTemplate(labelTemplates[v]);
-      return patched;
-    }
-
-    // 3) 대기N (대N 정규식에 걸리기 전 먼저 검사)
-    if (/^대기\d+$/.test(v)) {
-      patched.dia = v;
-      applyTemplate(labelTemplates[v]);
-      return patched;
-    }
-
-    // 4) 대N
-    if (/^대\d+$/.test(v)) {
-      const n = Number(v.replace(/[^0-9]/g, ""));
-      const key = `대${n}`;
-      patched.dia = key;
-      applyTemplate(labelTemplates[key] || diaTemplates[n]);
-      return patched;
-    }
-
-    // 5) 숫자 + d/D  (소문자 "1d", 대문자 "1D" 모두 허용)
-    if (/^\d+[dD]$/.test(v)) {
-      const n = Number(v.replace(/[dD]$/, ""));
-      if (Number.isFinite(n)) {
-        patched.dia = n;
-        applyTemplate(diaTemplates[n]);
-      }
-      return patched;
-    }
-
-    // 6) 순수 숫자 "1", "12"
-    if (/^\d+$/.test(v)) {
-      const n = Number(v);
-      if (Number.isFinite(n)) {
-        patched.dia = n;
-        applyTemplate(diaTemplates[n]);
-      }
-      return patched;
-    }
-
-    // 7) 그 외 문자열 라벨이 labelTemplates에 있으면 사용
-    if (labelTemplates[v]) {
-      patched.dia = v;
-      applyTemplate(labelTemplates[v]);
-      return patched;
-    }
-
-    // 알 수 없는 값 — 최소한 dia 문자열만 갱신
-    patched.dia = vRaw;
-    return patched;
+    return applyOverride(row, vRaw, overrideTemplates);
   }
 
   function rowAtDateForNameWithOverride(name, dateObj) {
@@ -899,82 +852,158 @@ export default function App() {
     });
 
     // ── override 이관 ──
-    // 실제 저장된 names[idxA]/names[idxB] 를 키로 사용
+    //  일일 변경(휴가·교육·교번 변경)과 하루 이름 변경은 "사람" 에 붙은 정보.
+    //  · 단순 개명(오타 수정 등): 옛 이름 → 새 이름으로 옮김
+    //  · 두 사람 자리 교환: 각자 자기 것을 그대로 가짐 (예전엔 서로 맞바꿔서
+    //    A 의 휴가가 B 에게 넘어가는 문제가 있었음)
     const actualOldName = common.names[idxA];
-    const actualNewName = isSwap ? common.names[idxB] : newName;
-
-    // 교번 override
-    setOverridesByDepot((prev) => {
-      const depotMap = prev?.[selectedDepot];
-      if (!depotMap) return prev;
-      const nextDepotMap = { ...depotMap };
-      let changed = false;
-      Object.keys(nextDepotMap).forEach((iso) => {
-        const dayMap = nextDepotMap[iso];
-        if (!dayMap) return;
-        const hasOld = Object.prototype.hasOwnProperty.call(
-          dayMap,
-          actualOldName
-        );
-        const hasNew = Object.prototype.hasOwnProperty.call(
-          dayMap,
-          actualNewName
-        );
-        if (!hasOld && !hasNew) return;
-        const nextDay = { ...dayMap };
-        if (isSwap) {
-          const a = hasOld ? dayMap[actualOldName] : undefined;
-          const b = hasNew ? dayMap[actualNewName] : undefined;
-          if (hasOld) delete nextDay[actualOldName];
-          if (hasNew) delete nextDay[actualNewName];
-          if (a !== undefined) nextDay[actualNewName] = a;
-          if (b !== undefined) nextDay[actualOldName] = b;
-        } else {
-          if (hasOld) {
-            nextDay[actualNewName] = dayMap[actualOldName];
+    if (!isSwap) {
+      const migrate = (prev) => {
+        const depotMap = prev?.[selectedDepot];
+        if (!depotMap) return prev;
+        let changed = false;
+        const nextDepotMap = {};
+        for (const [iso, dayMap] of Object.entries(depotMap)) {
+          if (
+            dayMap &&
+            Object.prototype.hasOwnProperty.call(dayMap, actualOldName)
+          ) {
+            const nextDay = { ...dayMap, [newName]: dayMap[actualOldName] };
             delete nextDay[actualOldName];
-          }
+            nextDepotMap[iso] = nextDay;
+            changed = true;
+          } else nextDepotMap[iso] = dayMap;
         }
-        if (Object.keys(nextDay).length === 0) delete nextDepotMap[iso];
-        else nextDepotMap[iso] = nextDay;
-        changed = true;
-      });
-      return changed ? { ...prev, [selectedDepot]: nextDepotMap } : prev;
-    });
-
-    // 이름 override: 두 이름 모두 해제
-    setNameOverridesByDepot((prev) => {
-      const depotMap = prev?.[selectedDepot];
-      if (!depotMap) return prev;
-      const nextDepotMap = { ...depotMap };
-      let changed = false;
-      Object.keys(nextDepotMap).forEach((iso) => {
-        const dayMap = nextDepotMap[iso];
-        if (!dayMap) return;
-        const hasOld = Object.prototype.hasOwnProperty.call(
-          dayMap,
-          actualOldName
-        );
-        const hasNew = Object.prototype.hasOwnProperty.call(
-          dayMap,
-          actualNewName
-        );
-        if (!hasOld && !hasNew) return;
-        const nextDay = { ...dayMap };
-        delete nextDay[actualOldName];
-        delete nextDay[actualNewName];
-        if (Object.keys(nextDay).length === 0) delete nextDepotMap[iso];
-        else nextDepotMap[iso] = nextDay;
-        changed = true;
-      });
-      return changed ? { ...prev, [selectedDepot]: nextDepotMap } : prev;
-    });
+        return changed ? { ...prev, [selectedDepot]: nextDepotMap } : prev;
+      };
+      setOverridesByDepot(migrate);
+      setNameOverridesByDepot(migrate);
+      migratePersonRefs(selectedDepot, actualOldName, newName);
+    }
 
     // 내 이름/행로 대상 연동
     if (!isSwap) {
       if (myName === actualOldName) setMyNameForDepot(selectedDepot, newName);
       if (routeTargetName === actualOldName) setRouteTargetName(newName);
     }
+  }
+
+  // 영구 교번 변경 — "이 사람을 (보고 있는 날짜 기준) newCode 자리로"
+  //
+  //  날짜 D 에 자리 p 의 사람은 gyobun[(p + seatShift + dd) % len] 을 받는다
+  //  (dd = D - 기준일). 따라서 D 에 newCode(인덱스 c) 를 받으려면
+  //  자리 p = c - seatShift - dd 로 옮겨야 한다.
+  //  예전엔 dd 를 무시해서, 오늘이 아닌 날짜를 보고 바꾸면 그 날짜엔
+  //  엉뚱한 교번이 들어갔음.
+  async function applyPermanentCode(targetName, newCode, dateObj) {
+    const key = DEPOT_TO_ZIP_KEY[selectedDepot] || selectedDepot;
+    const common = commonMap?.[key];
+    if (!common?.names?.length || !common?.gyobun?.length) {
+      alert("이 소속은 교번 데이터가 없어 영구 변경을 할 수 없습니다.");
+      return;
+    }
+    const norm = (x) => String(x || "").replace(/\s+/g, "").toLowerCase();
+    const len = common.names.length;
+    const srcIdx = common.names.findIndex((n) => norm(n) === norm(targetName));
+    const codeIdx = common.gyobun.findIndex((c) => norm(c) === norm(newCode));
+    if (srcIdx < 0) {
+      alert(`"${targetName}" 을(를) 교번표에서 찾을 수 없습니다.`);
+      return;
+    }
+    if (codeIdx < 0) {
+      alert(
+        `"${newCode}" 는 교번표에 없는 값이라 영구 변경할 수 없습니다.\n"이 날짜만" 으로 적용하세요.`
+      );
+      return;
+    }
+    const dd = diffDays(dateObj, anchorDate);
+    const shift = calcSeatShift(common);
+    const dstIdx = mod(codeIdx - shift - dd, len);
+    if (dstIdx === srcIdx) return; // 이미 그 교번
+    const swapName = common.names[dstIdx] || "";
+    const srcCodeOnDate = common.gyobun[mod(srcIdx + shift + dd, len)];
+    const needConfirm = !!swapName.trim();
+    const ok = needConfirm
+      ? window.confirm(
+          `"${targetName}"을(를) ${fmt(dateObj)} 기준 교번 ${newCode} 자리로 옮기면\n` +
+            `그 자리의 "${swapName}"은(는) 교번 ${srcCodeOnDate} 자리로 이동합니다.\n\n` +
+            `두 사람의 자리를 서로 바꾸시겠습니까? (이후 모든 날짜에 적용)`
+        )
+      : true;
+    if (!ok) return;
+
+    const newNames = [...common.names];
+    newNames[srcIdx] = swapName;
+    newNames[dstIdx] = common.names[srcIdx];
+    const oldPhones = common.phones || [];
+    const newPhones = [...oldPhones];
+    while (newPhones.length < len) newPhones.push("");
+    newPhones[srcIdx] = oldPhones[dstIdx] || "";
+    newPhones[dstIdx] = oldPhones[srcIdx] || "";
+
+    const nextMap = {
+      ...commonMap,
+      [key]: { ...common, names: newNames, phones: newPhones },
+    };
+    setCommonMap(nextMap);
+    try {
+      await saveCommonDataToDB(nextMap);
+    } catch {}
+
+    // TSV(교대 등 TSV 소속은 이것이 원본) — 이름 칸만 교환
+    setTablesByDepot((prev) => {
+      const tsv = prev?.[selectedDepot];
+      if (!tsv) return prev;
+      const lines = tsv.split(/\r?\n/);
+      const aLine = srcIdx + 1;
+      const bLine = dstIdx + 1;
+      if (lines.length <= Math.max(aLine, bLine)) return prev;
+      const aCols = lines[aLine].split("\t");
+      const bCols = lines[bLine].split("\t");
+      if (aCols.length < 2 || bCols.length < 2) return prev;
+      const tmp = aCols[1];
+      aCols[1] = bCols[1];
+      bCols[1] = tmp;
+      lines[aLine] = aCols.join("\t");
+      lines[bLine] = bCols.join("\t");
+      return { ...prev, [selectedDepot]: lines.join("\n") };
+    });
+
+    // 본인의 그 날짜 일일 변경만 해제 (상대방의 휴가 등은 그대로 둠)
+    setOverride(selectedDepot, dateObj, targetName, null);
+  }
+
+  // 개명 시 강조색·그룹 인원 목록도 새 이름으로
+  function migratePersonRefs(depot, oldName, newName) {
+    setHighlightMap((prev) => {
+      if (!prev || !prev[oldName]) return prev;
+      const next = { ...prev, [newName]: prev[oldName] };
+      delete next[oldName];
+      return next;
+    });
+    const fix = (list) =>
+      Array.isArray(list)
+        ? list.map((p) =>
+            p && p.name === oldName && p.depot === depot
+              ? { ...p, name: newName }
+              : p
+          )
+        : list;
+    setCompareSelected((prev) => fix(prev));
+    try {
+      const raw = localStorage.getItem("compareGroups_v1");
+      if (raw) {
+        const groups = JSON.parse(raw);
+        if (Array.isArray(groups)) {
+          localStorage.setItem(
+            "compareGroups_v1",
+            JSON.stringify(
+              groups.map((g) => ({ ...g, people: fix(g.people || []) }))
+            )
+          );
+        }
+      }
+    } catch {}
   }
 
   // 오늘 하루만: nameOverridesByDepot 에 저장
@@ -1013,9 +1042,15 @@ export default function App() {
     []
   );
   const [anchorDateByDepot, setAnchorDateByDepot] = useState(defaultAnchorMap);
-  const anchorDateStr = anchorDateByDepot[selectedDepot] ?? fmt(today);
+  // 기준일: commonMap 의 baseDate(이름 배치의 실제 기준)를 우선 사용.
+  //  예전엔 localStorage 의 anchorDateByDepot 와 IndexedDB 의 baseDate 가
+  //  따로 저장돼서, 한쪽만 저장된 채 앱이 꺼지면 하루 종일 교번이 1칸 밀렸음.
+  const anchorDateStr =
+    commonMap?.[DEPOT_TO_ZIP_KEY[selectedDepot] || selectedDepot]?.baseDate ||
+    anchorDateByDepot[selectedDepot] ||
+    fmt(today);
   const anchorDate = useMemo(
-    () => stripTime(new Date(anchorDateStr)),
+    () => parseYMD(anchorDateStr) || stripTime(new Date()),
     [anchorDateStr]
   );
   const setAnchorDateStrForDepot = (depot, value) =>
@@ -1109,42 +1144,19 @@ export default function App() {
     [peopleRows]
   );
 
-  const diaTemplates = React.useMemo(() => {
-    const map = {};
-    peopleRows.forEach((r) => {
-      const n = Number(r?.dia);
-      if (Number.isFinite(n) && !map[n])
-        map[n] = {
-          weekday: { ...r.weekday },
-          saturday: { ...r.saturday },
-          holiday: { ...r.holiday },
-          weekdayNext: { ...(r.weekdayNext || { in: "", out: "" }) },
-          saturdayNext: { ...(r.saturdayNext || { in: "", out: "" }) },
-          holidayNext: { ...(r.holidayNext || { in: "", out: "" }) },
-        };
-    });
-    return map;
-  }, [peopleRows]);
+  // 기준일에 "names[i] ↔ gyobun[i]" 가 아닌 경우(아직 오늘로 재배치 전인
+  // ZIP 원본)에도 맞게 계산되도록 baseName/baseCode 로 자리 차이를 보정.
+  // 재배치(rebase) 후에는 항상 0.
+  const seatShift = useMemo(() => {
+    const common = commonMap?.[DEPOT_TO_ZIP_KEY[selectedDepot] || selectedDepot];
+    return calcSeatShift(common);
+  }, [commonMap, selectedDepot]);
 
-  const labelTemplates = React.useMemo(() => {
-    const map = {};
-    peopleRows.forEach((r) => {
-      const d = r?.dia;
-      if (typeof d === "string") {
-        const key = d.replace(/\s+/g, "");
-        if (!map[key])
-          map[key] = {
-            weekday: { ...r.weekday },
-            saturday: { ...r.saturday },
-            holiday: { ...r.holiday },
-            weekdayNext: { ...(r.weekdayNext || { in: "", out: "" }) },
-            saturdayNext: { ...(r.saturdayNext || { in: "", out: "" }) },
-            holidayNext: { ...(r.holidayNext || { in: "", out: "" }) },
-          };
-      }
-    });
-    return map;
-  }, [peopleRows]);
+  // 일일 변경(override) 적용용 템플릿 — 현재 소속 데이터 기준
+  const overrideTemplates = React.useMemo(
+    () => buildTemplates(peopleRows),
+    [peopleRows]
+  );
 
   const DUTY_OPTIONS = React.useMemo(() => {
     const set = new Set(["비번", "휴", "교육", "휴가"]);
@@ -1314,8 +1326,15 @@ export default function App() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
+      const seenHolidayVer =
+        Number(localStorage.getItem("holidayDefaultsVersion")) || 1;
+      try {
+        localStorage.setItem(
+          "holidayDefaultsVersion",
+          String(HOLIDAY_DEFAULTS_VERSION)
+        );
+      } catch {}
       if (!raw) {
-        setMyNameForDepot("안심", nameList[0] || "");
         setHolidaysText(DEFAULT_HOLIDAYS_25_26);
       } else {
         const s = JSON.parse(raw);
@@ -1344,14 +1363,21 @@ export default function App() {
           setAnchorDateByDepot(
             Object.fromEntries(DEPOTS.map((d) => [d, s.anchorDateStr]))
           );
-        if (s.holidaysText) setHolidaysText(s.holidaysText);
-        if (!s.holidaysText || !String(s.holidaysText).trim())
+        if (!s.holidaysText || !String(s.holidaysText).trim()) {
           setHolidaysText(DEFAULT_HOLIDAYS_25_26);
+        } else {
+          // 저장된 목록이 있으면 그대로 쓰되, 앱 업데이트로 새로 추가된
+          // 공휴일(2027년, 노동절·제헌절·선거일 등)만 1회 병합
+          let text = s.holidaysText;
+          for (let v = seenHolidayVer + 1; v <= HOLIDAY_DEFAULTS_VERSION; v++) {
+            text = mergeHolidayText(text, HOLIDAY_ADDED_BY_VERSION[v]);
+          }
+          setHolidaysText(text);
+        }
         if (s.highlightMap) setHighlightMap(s.highlightMap);
         if (Array.isArray(s.compareSelected))
           setCompareSelected(s.compareSelected);
-        if (s.selectedDate)
-          setSelectedDate(stripTime(new Date(s.selectedDate)));
+        // selectedDate 는 복원하지 않음 — 앱은 항상 "오늘"로 열려야 함
       }
     } catch (e) {
       console.warn("[LOAD] 설정 로드 실패", e);
@@ -1381,7 +1407,21 @@ export default function App() {
         } catch (e) {
           console.warn("[App] commonMap 복구 시도 실패", e);
         }
-        if (current) setCommonMap(current);
+        if (current) {
+          // 근무시간 데이터 오타 보정 (18::27, 18;00, ~줄의 "-" 누락 등)
+          let fixedAny = false;
+          const fixed = {};
+          for (const [k, v] of Object.entries(current)) {
+            const nv = v && typeof v === "object" ? normalizeCommonWorktime(v) : v;
+            if (nv !== v) fixedAny = true;
+            fixed[k] = nv;
+          }
+          if (fixedAny) {
+            current = fixed;
+            saveCommonDataToDB(current).catch(() => {});
+          }
+          setCommonMap(current);
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -1398,6 +1438,54 @@ export default function App() {
       } catch {}
     })();
   }, []);
+
+  // ── 공휴일 자동 확인 (1주일에 한 번, 공식 데이터만, 추가만) ──
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const last = Number(localStorage.getItem("holidaySyncAt")) || 0;
+        if (Date.now() - last < 7 * 86400000) return;
+        if (typeof navigator !== "undefined" && navigator.onLine === false)
+          return;
+        const y = new Date().getFullYear();
+        const add = [];
+        let thisYearSource = "";
+        for (const yy of [y, y + 1]) {
+          const { dates, source } = await fetchKoreanHolidaysDetailed(yy);
+          if (yy === y) thisYearSource = source;
+          if (source === "kasi" || source === "official") add.push(...dates);
+        }
+        try {
+          localStorage.setItem(
+            "holidaySyncInfo",
+            JSON.stringify({ source: thisYearSource, at: Date.now() })
+          );
+        } catch {}
+        if (cancelled) return;
+        // 한 번 받아 본 날짜는 다시 넣지 않음 → 사용자가 일부러 지운 날짜
+        // (예: 회사가 휴일 다이아를 안 도는 노동절)는 되살아나지 않음
+        let seen = [];
+        try {
+          seen = JSON.parse(localStorage.getItem("holidaySyncSeen") || "[]");
+        } catch {}
+        const seenSet = new Set(seen);
+        const fresh = add.filter((d) => !seenSet.has(d));
+        if (fresh.length)
+          setHolidaysText((prev) => mergeHolidayText(prev, fresh));
+        add.forEach((d) => seenSet.add(d));
+        localStorage.setItem(
+          "holidaySyncSeen",
+          JSON.stringify([...seenSet].sort())
+        );
+        localStorage.setItem("holidaySyncAt", String(Date.now()));
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded]);
 
   // ── TSV → commonMap 자동 변환 (기존 사용자, commonMap 없을 때) ──
   //
@@ -1482,115 +1570,93 @@ export default function App() {
     });
   }, [tablesByDepot, anchorDateByDepot, loaded, commonMap === null]);
 
-  // ── 매일 anchorDate 자동 갱신 (오늘로 고정) ──
+  // ── 매일 기준일 자동 갱신 (오늘로 고정) ──
   //
-  //  원리: 각 사람의 "오늘 교번"을 기존 anchor로 한 번 계산해 저장해두고,
-  //        그 정답 매핑을 유지하도록 names 배열을 재배치한다.
-  //        그 다음 anchor = today 로 덮어쓴다.
-  //
-  //  새 공식 (anchor=today, dd=0): peopleRows_new[i].dia = gyobun[i]
-  //  → 각 i 위치에 "오늘 gyobun[i]를 받는 사람"을 넣으면 된다.
-  //
-  //  회전이 아닌 **직접 재배치**이므로 기존 anchor 계산 방식(역산/SetupWizard 모두)
-  //  과 일관되게 작동한다.
+  //  · ZIP 데이터(commonMap, source=zip): rebaseDepotToToday 로 이름 재배치.
+  //    anchorDateByDepot 상태와 무관하게 baseDate 만 보고 판단한다.
+  //  · ZIP 소속의 TSV 사본: commonMap 에서 매번 다시 만들어 항상 일치시킴
+  //    (예전엔 회전되지 않은 채 anchor 만 오늘로 바뀌어, IndexedDB 가
+  //     날아가 TSV 로 폴백되면 틀린 교번을 조용히 보여줬음)
+  //  · TSV 전용 소속(교대 등): 이름 칸 회전.
   useEffect(() => {
     if (!loaded) return;
     const todayStr = fmt(today);
 
-    // 이미 모든 소속이 오늘로 되어있으면 skip
-    const allToday = DEPOTS.every(
-      (d) => (anchorDateByDepot[d] || "") === todayStr
-    );
-    if (allToday) return;
-
-    // ZIP 데이터: 각 기지를 자기 info.txt (baseDate/baseName/baseCode) 기준으로
-    // "오늘 배치" 로 재정렬. (앞서 anchor 기준으로 회전시키던 로직은 버그 —
-    // ZIP 의 names 는 baseDate 기준으로 들어오기 때문에 anchor 기준 회전은 틀림)
+    // 1) ZIP commonMap 재배치
     setCommonMap((prevMap) => {
       if (!prevMap) return prevMap;
       const nextMap = { ...prevMap };
       let changed = false;
-
       for (const depot of DEPOTS) {
         const key = DEPOT_TO_ZIP_KEY[depot] || depot;
         const data = prevMap[key];
         if (!data?.names?.length || !data?.gyobun?.length) continue;
-        if (data.source !== "zip") continue; // ZIP 만 (TSV 는 아래 블록에서 처리)
-        if (data.baseDate === todayStr) continue; // 이미 오늘 배치
-
+        if (data.source !== "zip") continue;
+        if (data.baseDate === todayStr) continue;
         const rebuilt = rebaseDepotToToday(data, todayStr);
         if (rebuilt !== data) {
           nextMap[key] = rebuilt;
           changed = true;
         }
       }
-
-      if (changed) {
-        saveCommonDataToDB(nextMap).catch(() => {});
-      }
+      if (changed) saveCommonDataToDB(nextMap).catch(() => {});
       return changed ? nextMap : prevMap;
     });
 
-    // TSV 행: 이름 칸만 재배치 (교대/교대(외))
+    // 2) TSV
     setTablesByDepot((prevTables) => {
       const nextTables = { ...prevTables };
       let changed = false;
-
       for (const depot of DEPOTS) {
         const key = DEPOT_TO_ZIP_KEY[depot] || depot;
-        if (commonMap?.[key]?.source === "zip") continue; // ZIP은 위에서 처리
+        const zipData = commonMap?.[key];
+        if (zipData?.source === "zip") {
+          // 오늘로 재배치된 commonMap 에서만 사본 생성 (재배치 전이면 다음 렌더에)
+          if (zipData.baseDate !== todayStr) continue;
+          const tsv = commonToTsv(zipData);
+          if (tsv && tsv !== prevTables[depot]) {
+            nextTables[depot] = tsv;
+            changed = true;
+          }
+          continue;
+        }
 
         const currentAnchor = anchorDateByDepot[depot];
-        if (!currentAnchor) continue;
-        if (currentAnchor === todayStr) continue;
-
+        if (!currentAnchor || currentAnchor === todayStr) continue;
         const tsv = prevTables[depot];
         if (!tsv) continue;
         const lines = tsv.split(/\r?\n/);
         if (lines.length < 2) continue;
-
         const header = lines[0];
         const dataLines = lines.slice(1).filter((l) => l.trim());
         if (!dataLines.length) continue;
-
-        const anchorD = stripTime(new Date(currentAnchor));
+        const anchorD = parseYMD(currentAnchor);
+        if (!anchorD) continue;
         const dd = diffDays(today, anchorD);
         if (dd === 0) continue;
-
         const len = dataLines.length;
         const names = dataLines.map((row) => row.split("\t")[1] || "");
-
-        // names_new[j] = names[mod(j - dd, len)]
         const newNames = new Array(len);
-        for (let j = 0; j < len; j++) {
-          const oldI = (((j - dd) % len) + len) % len;
-          newNames[j] = names[oldI];
-        }
-
+        for (let j = 0; j < len; j++) newNames[j] = names[mod(j - dd, len)];
         const newDataLines = dataLines.map((row, i) => {
           const cols = row.split("\t");
           cols[1] = newNames[i];
           return cols.join("\t");
         });
-
         nextTables[depot] = [header, ...newDataLines].join("\n");
         changed = true;
       }
-
       return changed ? nextTables : prevTables;
     });
 
-    // 모든 anchor를 오늘로 덮어쓰기
+    // 3) anchor 를 오늘로
     setAnchorDateByDepot((prev) => {
+      if (DEPOTS.every((d) => prev[d] === todayStr)) return prev;
       const next = { ...prev };
-      for (const depot of DEPOTS) {
-        if (next[depot] !== todayStr) {
-          next[depot] = todayStr;
-        }
-      }
+      for (const depot of DEPOTS) next[depot] = todayStr;
       return next;
     });
-  }, [loaded, commonMap, fmt(today)]);
+  }, [loaded, commonMap, todayKey]);
 
   // ── SetupWizard 완료 ──
   //
@@ -1612,6 +1678,23 @@ export default function App() {
     if (mode === "zip") {
       // Wizard가 이미 names 를 오늘 정답 배치로 만들어서 넘김
       // (baseDate 도 today 로 세팅됨)
+      // 마법사를 다시 돌려도 이미 입력해 둔 전화번호는 이름 기준으로 유지
+      for (const [k, fresh] of Object.entries(newMap || {})) {
+        const old = commonMap?.[k];
+        if (!fresh?.names?.length || !old?.names?.length || !old?.phones?.length)
+          continue;
+        const byName = {};
+        old.names.forEach((n, i) => {
+          if (n && old.phones[i]) byName[String(n).replace(/\s+/g, "")] = old.phones[i];
+        });
+        const phones = fresh.names.map(
+          (n, i) =>
+            (fresh.phones && fresh.phones[i]) ||
+            byName[String(n || "").replace(/\s+/g, "")] ||
+            ""
+        );
+        newMap[k] = { ...fresh, phones };
+      }
       Object.assign(finalMap, newMap);
     } else {
       if (newMap?._pathsOnly)
@@ -1765,7 +1848,7 @@ export default function App() {
     if (!nameIndexMap.has(name) || !peopleRows.length) return undefined;
     const baseIdx = nameIndexMap.get(name);
     const dd = diffDays(date, anchorDate);
-    const idx = mod(baseIdx + dd, peopleRows.length);
+    const idx = mod(baseIdx + seatShift + dd, peopleRows.length);
     return peopleRows[idx];
   }
 
@@ -1837,7 +1920,18 @@ export default function App() {
     const holiday = entries
       .filter((e) => e.type === "holiday")
       .sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
-    return [...work, ...dae, ...biban, ...holiday].map(
+    // 위 4개 분류 어디에도 안 들어간 사람 (교육·휴가·대기N·주·야 등)
+    //  — 예전엔 목록에서 아예 사라졌음
+    const used = new Set([...work, ...dae, ...biban, ...holiday]);
+    const other = entries
+      .filter((e) => !used.has(e))
+      .sort(
+        (a, b) =>
+          String(a.row?.dia ?? "").localeCompare(String(b.row?.dia ?? ""), "ko", {
+            numeric: true,
+          }) || String(a.name).localeCompare(String(b.name), "ko")
+      );
+    return [...work, ...dae, ...other, ...biban, ...holiday].map(
       ({ name, row, type, origHasTilde }) => {
         let displayDia = row?.dia;
 
@@ -1876,6 +1970,9 @@ export default function App() {
     commonMap,
     anchorDateStr,
     holidaySet,
+    peopleRows,
+    overrideTemplates,
+    seatShift,
   ]);
 
   const nameGridRows = useMemo(() => {
@@ -1890,6 +1987,9 @@ export default function App() {
     overridesByDepot,
     anchorDateStr,
     commonMap,
+    peopleRows,
+    overrideTemplates,
+    seatShift,
   ]);
 
   const days = monthGridMonday(selectedDate);
@@ -2264,6 +2364,9 @@ export default function App() {
       overridesByDepot, // 교번 override 적용/해제 반영
       commonMap, // 영구 변경(swap) 반영
       anchorDateStr, // anchor 이동 시 반영
+      peopleRows,
+      overrideTemplates,
+      seatShift,
     ]
   );
   const routeT = React.useMemo(
@@ -2285,22 +2388,32 @@ export default function App() {
   const depotKey = DEPOT_TO_ZIP_KEY[selectedDepot] || selectedDepot;
   const currentCommonData = commonMap?.[depotKey] || null;
   const currentGyobunList = currentCommonData?.gyobun || DUTY_OPTIONS;
+  // 근무자 편집 > 교번: 교번표 + "이 날짜만" 용 비번/휴/교육/휴가
+  const personEditCodeList = React.useMemo(() => {
+    const base = currentCommonData?.gyobun?.length
+      ? currentCommonData.gyobun
+      : DUTY_OPTIONS;
+    return Array.from(new Set([...base, "비번", "휴", "교육", "휴가"]));
+  }, [currentCommonData, DUTY_OPTIONS]);
   const currentPaths = currentCommonData?.paths || {};
   const routeCodeStr = tsvDiaToRouteCode(routeRow?.dia);
 
   // 각 교번을 "지금" 소유한 사람 맵 — PersonEditModal swap 미리보기용
   // (anchor=today, dd=0 이므로 names[i] 의 교번 = gyobun[i])
+  // 각 교번을 "보고 있는 날짜에" 받는 사람 — PersonEditModal 교환 미리보기용
   const codeOwnerMap = React.useMemo(() => {
     const map = {};
     const names = currentCommonData?.names || [];
     const gyobun = currentCommonData?.gyobun || [];
     const len = Math.min(names.length, gyobun.length);
-    for (let i = 0; i < len; i++) {
-      const code = gyobun[i];
-      if (code) map[code] = names[i] || "";
+    if (!len) return map;
+    const dd = diffDays(selectedDate, anchorDate);
+    for (let c = 0; c < len; c++) {
+      const code = gyobun[c];
+      if (code) map[code] = names[mod(c - seatShift - dd, len)] || "";
     }
     return map;
-  }, [currentCommonData]);
+  }, [currentCommonData, selectedDate, anchorDate, seatShift]);
 
   // 수정모드 셀 탭 → PersonEditModal 열기 (override 정보 함께 전달)
   function openPersonEditModal(name, row) {
@@ -2328,88 +2441,6 @@ export default function App() {
       (peopleRows || []).find((r) => r.name === routeTarget)?.phone || "";
     return String(p).trim();
   }, [peopleRows, routeTarget]);
-
-  function DutyModal() {
-    if (!dutyModal.open) return null;
-    const { date, name } = dutyModal;
-    const iso2 = fmt(date);
-    const [pendingOpt, setPendingOpt] = React.useState(null);
-    return (
-      <div className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center p-2">
-        <div
-          className="w-[min(680px,100vw)] rounded-2xl bg-gray-800 text-gray-100 p-3 shadow-lg mb-[72px] sm:mb-0"
-          style={{ marginBottom: "max(72px, env(safe-area-inset-bottom))" }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">근무 변경</div>
-            <button
-              className="text-sm opacity-70"
-              onClick={() =>
-                setDutyModal({ open: false, date: null, name: null })
-              }
-            >
-              닫기
-            </button>
-          </div>
-          <div className="text-xs text-gray-300 mb-3">
-            {name} · {iso2}
-          </div>
-          <div
-            className="grid gap-2 grid-cols-6 sm:grid-cols-8"
-            style={{ paddingBottom: "80px" }}
-          >
-            {DUTY_OPTIONS.map((opt) => {
-              const active = pendingOpt === opt;
-              return (
-                <button
-                  key={opt}
-                  onPointerDown={() => setPendingOpt(opt)}
-                  onClick={() => {
-                    if (pendingOpt === opt) {
-                      setOverride(selectedDepot, date, name, opt);
-                      setDutyModal({ open: false, date: null, name: null });
-                    } else setPendingOpt(opt);
-                  }}
-                  className={[
-                    "h-9 rounded-lg bg-gray-700 hover:bg-gray-600",
-                    "text-xs font-medium flex items-center justify-center",
-                    active ? "ring-2 ring-indigo-400" : "",
-                  ].join(" ")}
-                >
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 mb-6 flex items-center justify-between">
-            <div className="text-[11px] text-gray-400">
-              한 번 누르면 선택,{" "}
-              <span className="text-gray-200">두 번 누르면 반영</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setOverride(selectedDepot, date, name, null);
-                  setDutyModal({ open: false, date: null, name: null });
-                }}
-                className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs"
-              >
-                설정 해제
-              </button>
-              <button
-                onClick={() =>
-                  setDutyModal({ open: false, date: null, name: null })
-                }
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white"
-              >
-                완료
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="app-shell">
@@ -2503,7 +2534,10 @@ export default function App() {
                         selectedDate.getMonth() + 1
                       ).padStart(2, "0")}`}
                       onChange={(e) => {
-                        const [y, m] = e.target.value.split("-").map(Number);
+                        const [y, m] = String(e.target.value || "")
+                          .split("-")
+                          .map(Number);
+                        if (!y || !m) return; // 비우기(지우기) 시 무시
                         setSelectedDate(
                           stripTime(new Date(y, (m || 1) - 1, 1))
                         );
@@ -2701,6 +2735,7 @@ export default function App() {
                                       myName ||
                                       ""
                                     ).trim();
+                                    if (!person) return; // 대상 이름 없음
                                     setDutyModal({
                                       open: true,
                                       date: stripTime(d),
@@ -2819,9 +2854,10 @@ export default function App() {
                       type="date"
                       className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
                       value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
+                      onChange={(e) => {
+                        const d = parseYMD(e.target.value);
+                        if (d) setSelectedDate(d);
+                      }}
                     />
                     <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
                       {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
@@ -2981,9 +3017,10 @@ export default function App() {
                   type="date"
                   className="bg-gray-700 rounded-xl px-2 py-1 text-sm"
                   value={fmt(selectedDate)}
-                  onChange={(e) =>
-                    setSelectedDate(stripTime(new Date(e.target.value)))
-                  }
+                  onChange={(e) => {
+                    const d = parseYMD(e.target.value);
+                    if (d) setSelectedDate(d);
+                  }}
                 />
                 <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
                   {weekdaysKR[(selectedDate.getDay() + 6) % 7]}
@@ -3220,9 +3257,10 @@ export default function App() {
                       type="date"
                       className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
                       value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
+                      onChange={(e) => {
+                        const d = parseYMD(e.target.value);
+                        if (d) setSelectedDate(d);
+                      }}
                     />
                     <span className="text-[11px] text-gray-300">{wk}</span>
                     {fmt(selectedDate) !== fmt(today) && (
@@ -3325,9 +3363,10 @@ export default function App() {
                       type="date"
                       className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
                       value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
+                      onChange={(e) => {
+                        const d = parseYMD(e.target.value);
+                        if (d) setSelectedDate(d);
+                      }}
                     />
                     <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
                       {wk}
@@ -3512,9 +3551,10 @@ export default function App() {
                       type="date"
                       className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
                       value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
+                      onChange={(e) => {
+                        const d = parseYMD(e.target.value);
+                        if (d) setSelectedDate(d);
+                      }}
                     />
                     <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
                       {wk}
@@ -3539,6 +3579,7 @@ export default function App() {
                 >
                   <WakeIcsPanel
                     dateObj={selectedDate}
+                    selectedDate={selectedDate}
                     who={routeTarget}
                     startHM={startHM ?? toHMorNull(routeIn)}
                     endHM={endHM ?? toHMorNull(routeOut)}
@@ -3566,9 +3607,10 @@ export default function App() {
                       type="date"
                       className="bg-gray-700 rounded-xl px-2 py-1 text-xs"
                       value={fmt(selectedDate)}
-                      onChange={(e) =>
-                        setSelectedDate(stripTime(new Date(e.target.value)))
-                      }
+                      onChange={(e) => {
+                        const d = parseYMD(e.target.value);
+                        if (d) setSelectedDate(d);
+                      }}
                     />
                     <span className="px-2 py-0.5 rounded-full bg-gray-700 text-gray-200 text-[11px]">
                       {wk}
@@ -3628,8 +3670,6 @@ export default function App() {
               anchorDateByDepot,
               highlightMap,
               overridesByDepot,
-              labelTemplates,
-              diaTemplates,
               setRouteTargetName,
               setSelectedTab,
             }}
@@ -3642,7 +3682,13 @@ export default function App() {
             <SettingsView
               {...{
                 selectedDepot,
-                setSelectedDepot,
+                // 설정에서 바꾼 소속은 "기본 소속" — 홈으로 가도 유지되도록
+                setSelectedDepot: (v) => {
+                  setSelectedDepot(v);
+                  setHomeDepot(v);
+                },
+                onRenamePerson: (oldN, newN) =>
+                  applyPermanentRename(oldN, newN),
                 myName,
                 setMyNameForDepot,
                 nameList,
@@ -3752,13 +3798,43 @@ export default function App() {
         </FixedTabbarPortal>
       </div>
 
-      <DutyModal />
+      <DutyModalView
+        open={dutyModal.open}
+        date={dutyModal.date}
+        name={dutyModal.name}
+        options={DUTY_OPTIONS}
+        currentLabel={(() => {
+          if (!dutyModal.open || !dutyModal.date) return "";
+          const r = rowAtDateForNameWithOverride(dutyModal.name, dutyModal.date);
+          if (r?.dia == null) return "";
+          return typeof r.dia === "number" ? `${r.dia}D` : String(r.dia);
+        })()}
+        hasOverride={
+          dutyModal.open &&
+          !!dutyModal.date &&
+          hasOverride(selectedDepot, dutyModal.date, dutyModal.name)
+        }
+        onApply={(opt) => {
+          setOverride(selectedDepot, dutyModal.date, dutyModal.name, opt);
+          setDutyModal({ open: false, date: null, name: null });
+        }}
+        onClear={() => {
+          setOverride(selectedDepot, dutyModal.date, dutyModal.name, null);
+          setDutyModal({ open: false, date: null, name: null });
+        }}
+        onClose={() => setDutyModal({ open: false, date: null, name: null })}
+      />
 
       {/* ✅ SetupWizard — ZIP/TSV 초기설정 */}
       {showSetupWizard && (
         <div className="fixed inset-0 z-[99999] bg-gray-900 overflow-y-auto">
           <SetupWizard
             onComplete={handleSetupComplete}
+            onCancel={
+              commonMap && localStorage.getItem("setupDone")
+                ? () => setShowSetupWizard(false)
+                : undefined
+            }
             existingTsvData={commonMap}
             defaultDepot={selectedDepot}
           />
@@ -3775,7 +3851,7 @@ export default function App() {
         hasTodayCode={personEditModal.hasTodayCode}
         hasTodayName={personEditModal.hasTodayName}
         nameList={nameList}
-        codeList={currentGyobunList}
+        codeList={personEditCodeList}
         codeOwnerMap={codeOwnerMap}
         onClose={() =>
           setPersonEditModal({
@@ -3838,119 +3914,17 @@ export default function App() {
           // 2) 교번 변경
           if (newCode) {
             if (scope === "today") {
-              // 오늘 하루만 — overridesByDepot에 저장
+              // 이 날짜만 — overridesByDepot 에 저장.
+              // 원래 교번을 다시 고르면 변경 해제로 처리.
+              const nz = (x) => String(x || "").replace(/\s+/g, "").toLowerCase();
               setOverride(
                 selectedDepot,
                 stripTime(new Date(selectedDate)),
                 targetName,
-                newCode
+                nz(newCode) === nz(personEditModal.baseCode) ? null : newCode
               );
             } else {
-              // 영구 교번 변경 — names 배열 swap 방식
-              //
-              // 원리:
-              //   gyobun[] 배열은 위치 고정 (각 index = 특정 교번).
-              //   anchor=today, dd=0 이므로 오늘 names[i] 의 교번 = gyobun[i].
-              //   따라서 "김철수를 7번 교번으로" = names 배열에서
-              //   김철수가 있던 idx와 gyobun[j]=="7d" 인 j 의 이름을 swap.
-              const key = DEPOT_TO_ZIP_KEY[selectedDepot] || selectedDepot;
-              const common = commonMap?.[key];
-              if (common?.names?.length && common?.gyobun?.length) {
-                const norm = (s) => String(s || "").replace(/\s/g, "");
-                const srcIdx = common.names.findIndex(
-                  (n) => norm(n) === norm(targetName)
-                );
-                // newCode 가 위치한 index 찾기 (대소문자 무시)
-                const normCode = (c) =>
-                  String(c || "")
-                    .toLowerCase()
-                    .replace(/\s/g, "");
-                const targetCodeIdx = common.gyobun.findIndex(
-                  (c) => normCode(c) === normCode(newCode)
-                );
-
-                if (srcIdx < 0 || targetCodeIdx < 0) {
-                  // 못 찾으면 그냥 리턴
-                } else if (srcIdx === targetCodeIdx) {
-                  // 이미 그 자리 — 할 일 없음
-                } else {
-                  const swapName = common.names[targetCodeIdx];
-                  // 빈자리(이름 없음)면 확인 없이 진행
-                  const needConfirm = !!(swapName && swapName.trim());
-                  const ok = needConfirm
-                    ? window.confirm(
-                        `"${targetName}"을(를) 교번 ${newCode} 자리로 옮기면\n` +
-                          `현재 그 자리에 있는 "${swapName}"은(는) ` +
-                          `교번 ${common.gyobun[srcIdx]} 자리로 이동합니다.\n\n` +
-                          `두 사람의 자리를 서로 바꾸시겠습니까?`
-                      )
-                    : true;
-                  if (!ok) return;
-
-                  // names swap
-                  const newNames = [...common.names];
-                  newNames[srcIdx] = swapName;
-                  newNames[targetCodeIdx] = targetName;
-
-                  // phones 도 함께 swap
-                  const oldPhones = common.phones || [];
-                  const newPhones = [...oldPhones];
-                  if (oldPhones.length === common.names.length) {
-                    newPhones[srcIdx] = oldPhones[targetCodeIdx] || "";
-                    newPhones[targetCodeIdx] = oldPhones[srcIdx] || "";
-                  }
-
-                  const nextMap = {
-                    ...commonMap,
-                    [key]: { ...common, names: newNames, phones: newPhones },
-                  };
-                  setCommonMap(nextMap);
-                  try {
-                    await saveCommonDataToDB(nextMap);
-                  } catch {}
-
-                  // TSV 동기화 — 이름 컬럼(cols[1])만 swap (gyobun=dia 컬럼은 그대로)
-                  setTablesByDepot((prev) => {
-                    const tsv = prev?.[selectedDepot];
-                    if (!tsv) return prev;
-                    const lines = tsv.split(/\r?\n/);
-                    const aLine = srcIdx + 1;
-                    const bLine = targetCodeIdx + 1;
-                    if (lines.length > Math.max(aLine, bLine)) {
-                      const aCols = lines[aLine].split("\t");
-                      const bCols = lines[bLine].split("\t");
-                      if (aCols.length >= 2 && bCols.length >= 2) {
-                        const tmp = aCols[1];
-                        aCols[1] = bCols[1];
-                        bCols[1] = tmp;
-                        lines[aLine] = aCols.join("\t");
-                        lines[bLine] = bCols.join("\t");
-                        return {
-                          ...prev,
-                          [selectedDepot]: lines.join("\n"),
-                        };
-                      }
-                    }
-                    return prev;
-                  });
-
-                  // 해당 날짜에 걸려있던 일시 override는 swap된 두 이름 모두 해제
-                  setOverride(
-                    selectedDepot,
-                    stripTime(new Date(selectedDate)),
-                    targetName,
-                    null
-                  );
-                  if (swapName) {
-                    setOverride(
-                      selectedDepot,
-                      stripTime(new Date(selectedDate)),
-                      swapName,
-                      null
-                    );
-                  }
-                }
-              }
+              applyPermanentCode(targetName, newCode, selectedDate);
             }
           }
         }}
@@ -3960,6 +3934,95 @@ export default function App() {
 }
 
 /* ─── 공통 컴포넌트 ─── */
+
+/* ─── 근무 변경 모달 (달력 길게 누르기) ───
+ *  예전엔 App 안에서 정의된 컴포넌트라 App 이 다시 그려질 때마다 새로
+ *  만들어졌고, onPointerDown 에서 선택 → 같은 탭의 onClick 에서 "이미 선택됨"
+ *  으로 판단해 한 번만 눌러도 바로 반영됐음. 또 "완료" 는 선택을 버렸음.
+ *  지금: 한 번 탭 = 선택, 같은 걸 한 번 더 탭 또는 "완료" = 반영.
+ */
+function DutyModalView({
+  open,
+  date,
+  name,
+  options,
+  currentLabel,
+  hasOverride,
+  onApply,
+  onClear,
+  onClose,
+}) {
+  const [pendingOpt, setPendingOpt] = React.useState(null);
+  React.useEffect(() => {
+    if (open) setPendingOpt(null);
+  }, [open, date, name]);
+  if (!open || !date) return null;
+  const iso2 = fmt(date);
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center p-2">
+      <div
+        className="w-[min(680px,100vw)] rounded-2xl bg-gray-800 text-gray-100 p-3 shadow-lg mb-[72px] sm:mb-0"
+        style={{ marginBottom: "max(72px, env(safe-area-inset-bottom))" }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-semibold">근무 변경</div>
+          <button className="text-sm opacity-70" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+        <div className="text-xs text-gray-300 mb-3">
+          {name} · {iso2}
+          {currentLabel ? ` · 현재 ${hasOverride ? "*" : ""}${currentLabel}` : ""}
+        </div>
+        <div
+          className="grid gap-2 grid-cols-6 sm:grid-cols-8"
+          style={{ paddingBottom: "80px" }}
+        >
+          {options.map((opt) => {
+            const active = pendingOpt === opt;
+            return (
+              <button
+                key={opt}
+                onClick={() => {
+                  if (pendingOpt === opt) onApply(opt);
+                  else setPendingOpt(opt);
+                }}
+                className={[
+                  "h-9 rounded-lg bg-gray-700 hover:bg-gray-600",
+                  "text-xs font-medium flex items-center justify-center",
+                  active ? "ring-2 ring-indigo-400" : "",
+                ].join(" ")}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3 mb-6 flex items-center justify-between">
+          <div className="text-[11px] text-gray-400">
+            한 번 누르면 선택,{" "}
+            <span className="text-gray-200">두 번 누르거나 완료로 반영</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClear}
+              disabled={!hasOverride}
+              className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs disabled:opacity-40"
+            >
+              설정 해제
+            </button>
+            <button
+              onClick={() => (pendingOpt ? onApply(pendingOpt) : onClose())}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white"
+            >
+              완료
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function RosterGrid({
   rows,
@@ -4172,8 +4235,6 @@ function CompareWeeklyBoard({
   setCompareSelected,
   slideViewportH,
   overridesByDepot,
-  labelTemplates,
-  diaTemplates,
   setRouteTargetName,
   setSelectedTab,
 }) {
@@ -4239,6 +4300,9 @@ function CompareWeeklyBoard({
           rows,
           nameMap,
           names: rows.map((r) => r.name).filter(Boolean),
+          templates: buildTemplates(rows),
+          baseDate: common.baseDate || null,
+          shift: calcSeatShift(common),
         };
         continue;
       }
@@ -4256,6 +4320,9 @@ function CompareWeeklyBoard({
         rows,
         nameMap,
         names: rows.map((r) => r.name).filter(Boolean),
+        templates: buildTemplates(rows),
+        baseDate: null,
+        shift: 0,
       };
     }
     return map;
@@ -4267,79 +4334,21 @@ function CompareWeeklyBoard({
       const { rows, nameMap } = pack;
       if (!nameMap.has(name) || !rows.length) return undefined;
       const baseIdx = nameMap.get(name);
-      const anchorStr = anchorDateByDepot?.[depot];
+      // 기준일: commonMap 의 baseDate 가 있으면 그것을 우선 (이름 배치의 실제 기준)
+      const anchorStr = pack.baseDate || anchorDateByDepot?.[depot];
       const anchor = anchorStr
-        ? stripTime(new Date(anchorStr))
+        ? parseYMD(anchorStr) || stripTime(new Date())
         : stripTime(new Date());
-      const dd = Math.floor((stripTime(date) - anchor) / 86400000);
-      const idx = (((baseIdx + dd) % rows.length) + rows.length) % rows.length;
+      const dd = diffDays(date, anchor);
+      const k = baseIdx + (pack.shift || 0) + dd;
+      const idx = ((k % rows.length) + rows.length) % rows.length;
       const baseRow = rows[idx];
       const iso = fmt(stripTime(new Date(date)));
       const v = overridesByDepot?.[depot]?.[iso]?.[name];
-      if (!v) return baseRow;
-      const patched = { ...(baseRow || {}) };
-      const applyTemplate = (tpl) => {
-        if (!tpl) return;
-        patched.weekday = { ...tpl.weekday };
-        patched.saturday = { ...tpl.saturday };
-        patched.holiday = { ...tpl.holiday };
-        // 🌙 야간 퇴근 시간 계산을 위한 다음 자리 worktime 도 함께 교체
-        if (tpl.weekdayNext) patched.weekdayNext = { ...tpl.weekdayNext };
-        if (tpl.saturdayNext) patched.saturdayNext = { ...tpl.saturdayNext };
-        if (tpl.holidayNext) patched.holidayNext = { ...tpl.holidayNext };
-      };
-      if (v === "비번" || v === "휴") {
-        patched.dia = v;
-        applyTemplate(labelTemplates[v]);
-        return patched;
-      }
-      if (v === "교육" || v === "휴가") {
-        patched.dia = v;
-        if (labelTemplates[v]) {
-          applyTemplate(labelTemplates[v]);
-        } else {
-          patched.weekday = { in: "", out: "" };
-          patched.saturday = { in: "", out: "" };
-          patched.holiday = { in: "", out: "" };
-        }
-        return patched;
-      }
-      if (/^대\d+$/.test(v)) {
-        const n = Number(v.replace(/[^0-9]/g, ""));
-        patched.dia = `대${n}`;
-        const k = `대${n}`.replace(/\s+/g, "");
-        applyTemplate(labelTemplates[k] || diaTemplates[n]);
-        return patched;
-      }
-      if (v === "주" || v === "야") {
-        patched.dia = v;
-        applyTemplate(labelTemplates[v]);
-        return patched;
-      }
-      if (/^\d+D$/.test(v)) {
-        const n = Number(v.replace("D", ""));
-        if (Number.isFinite(n)) {
-          patched.dia = n;
-          applyTemplate(diaTemplates[n]);
-        }
-        return patched;
-      }
-      if (/^\d+$/.test(String(v))) {
-        const n = Number(v);
-        patched.dia = n;
-        applyTemplate(diaTemplates[n]);
-        return patched;
-      }
-      patched.dia = v;
-      return patched;
+      // 다른 소속 사람도 "그 사람 소속" 의 교번표로 적용
+      return applyOverride(baseRow, v, pack.templates);
     },
-    [
-      parsedByDepot,
-      anchorDateByDepot,
-      overridesByDepot,
-      labelTemplates,
-      diaTemplates,
-    ]
+    [parsedByDepot, anchorDateByDepot, overridesByDepot]
   );
   const normalized = React.useMemo(() => {
     if (!Array.isArray(compareSelected) || !compareSelected.length)
@@ -5267,7 +5276,7 @@ function CompareWeeklyBoard({
               outside =
                 d.getMonth() !== monthIdx || d.getFullYear() !== monthYear;
             const color =
-              dow === 0
+              dow === 0 || holidaySet?.has(isoD)
                 ? "text-red-400"
                 : dow === 6
                 ? "text-blue-400"

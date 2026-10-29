@@ -25,6 +25,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <title>교번 캘린더</title>
+    <script>
+      // 저장된 테마를 React 로딩 전에 먼저 적용 (밝게 깜빡이는 것 방지)
+      try {
+        var t = localStorage.getItem("theme");
+        document.documentElement.dataset.theme =
+          t === "light" || t === "dark" ? t : "dark";
+      } catch (e) {}
+    </script>
   </head>
 
   <body style="padding-top: env(safe-area-inset-top)">

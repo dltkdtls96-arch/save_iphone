@@ -110,6 +110,12 @@ export default function PersonEditModal({
   const codeChanged = selectedCode && selectedCode !== oldCode;
 
   const currentChanged = mode === "name" ? nameChanged : codeChanged;
+  // 비번/휴/교육/휴가 처럼 교번표에 없는 값은 "이 날짜만" 만 가능
+  const codeNotInTable =
+    mode === "code" &&
+    !!selectedCode &&
+    !!codeOwnerMap &&
+    !Object.prototype.hasOwnProperty.call(codeOwnerMap, selectedCode);
 
   const codeOwner =
     codeChanged && codeOwnerMap ? codeOwnerMap[selectedCode] || "" : "";
@@ -170,6 +176,8 @@ export default function PersonEditModal({
         : isExistingOther
         ? "자리 교환"
         : "데이터 자체 변경"
+      : codeNotInTable
+      ? "이 날짜만 가능"
       : willCodeSwapWith
       ? "자리 교환"
       : "데이터 자체 변경";
@@ -195,7 +203,7 @@ export default function PersonEditModal({
               <span className={getDiaColor(oldCode)}>{oldCode || "—"}</span>
               {(hasTodayName || hasTodayCode) && (
                 <span className="ml-2 text-[10px] text-amber-300">
-                  ★ 오늘 변경됨
+                  ★ 이 날짜 변경됨
                 </span>
               )}
             </div>
@@ -244,7 +252,7 @@ export default function PersonEditModal({
         {currentHasOverride && (
           <div className="mb-3 p-2.5 rounded-lg bg-amber-950/40 border border-amber-700/40 flex items-center justify-between gap-2">
             <div className="text-[11px] text-amber-200 leading-snug">
-              오늘만 변경된 상태
+              이 날짜만 변경된 상태
               <span className="text-amber-400/80 ml-1">
                 (원래:{" "}
                 <span
@@ -413,11 +421,11 @@ export default function PersonEditModal({
             className="py-3 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800/40 disabled:text-gray-600 text-gray-100 border border-gray-700 flex flex-col items-center gap-0.5"
           >
             <span className="text-[13px] font-semibold">이 날짜만</span>
-            <span className="text-[10px] text-gray-500">오늘만 변경</span>
+            <span className="text-[10px] text-gray-500">하루만 변경</span>
           </button>
           <button
             onClick={() => handleApply("permanent")}
-            disabled={!currentChanged}
+            disabled={!currentChanged || codeNotInTable}
             className="py-3 rounded-xl bg-gray-100 hover:bg-white disabled:bg-gray-800/40 disabled:text-gray-600 text-gray-900 flex flex-col items-center gap-0.5"
           >
             <span className="text-[13px] font-semibold">이 사람 계속</span>

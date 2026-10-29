@@ -32,16 +32,19 @@ function getDayType(dateStr, holidaySet = new Set()) {
   return "nor";
 }
 
-function addOneDay(dateStr) {
+// 로컬 날짜 문자열로 ±1일 (toISOString 은 UTC 라서 한국시간에서 하루 밀렸음)
+function shiftDay(dateStr, n) {
   const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 }
-
+function addOneDay(dateStr) {
+  return shiftDay(dateStr, 1);
+}
 function subOneDay(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return shiftDay(dateStr, -1);
 }
 
 export function getPathFolder(depot, code, dateStr, holidaySet = new Set()) {

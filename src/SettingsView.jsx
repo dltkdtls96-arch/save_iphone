@@ -10,7 +10,7 @@ import {
 import PasswordSettings from "./lock/PasswordSettings";
 import {
   saveCommonDataToDB,
-  fetchKoreanHolidaysRange,
+  fetchKoreanHolidaysDetailed,
   DEPOT_TO_ZIP_KEY,
   diagnoseStorage,
 } from "./dataEngine";
@@ -144,6 +144,7 @@ export default function SettingsView(props) {
     commonMap,
     setCommonMap,
     peopleRows,
+    onRenamePerson,
   } = props;
 
   const palette = [
@@ -206,6 +207,7 @@ export default function SettingsView(props) {
 
   const [holidayLoading, setHolidayLoading] = React.useState(false);
   const [holidayMsg, setHolidayMsg] = React.useState("");
+  const [, setHolidayStamp] = React.useState(0); // 출처 표시 갱신용
 
   const [tsvOpen, setTsvOpen] = React.useState(false);
 
@@ -417,30 +419,21 @@ export default function SettingsView(props) {
         return;
       }
 
-      const newNames = [...common.names];
-      newNames[editingIdx] = newVal;
-      const nextMap = { ...commonMap, [key]: { ...common, names: newNames } };
-      setCommonMap?.(nextMap);
-      try {
-        await saveCommonDataToDB(nextMap);
-      } catch {}
-
-      try {
-        const lines = (currentTableText || "").split(/\r?\n/);
-        if (lines.length > editingIdx + 1) {
-          const cols = lines[editingIdx + 1].split("\t");
-          if (cols.length >= 2) {
-            cols[1] = newVal;
-            lines[editingIdx + 1] = cols.join("\t");
-            setTablesByDepot?.((prev) => ({
-              ...(prev || {}),
-              [selectedDepot]: lines.join("\n"),
-            }));
-          }
-        }
-      } catch {}
-
-      if (myName === oldName) setMyNameForDepot?.(selectedDepot, newVal);
+      // 단순 개명 — App 쪽 함수로 처리해서 일일 변경·강조색·그룹·내 이름까지
+      // 함께 새 이름으로 옮긴다 (예전엔 이름만 바뀌고 일일 변경이 끊겼음)
+      const sameOld = common.names.filter((n) => norm(n) === oldKey).length;
+      if (onRenamePerson && oldName.trim() && sameOld === 1) {
+        await onRenamePerson(oldName, newVal);
+      } else {
+        const newNames = [...common.names];
+        newNames[editingIdx] = newVal;
+        const nextMap = { ...commonMap, [key]: { ...common, names: newNames } };
+        setCommonMap?.(nextMap);
+        try {
+          await saveCommonDataToDB(nextMap);
+        } catch {}
+        if (myName === oldName) setMyNameForDepot?.(selectedDepot, newVal);
+      }
     }
 
     if (editField === "phone") {
@@ -477,20 +470,54 @@ export default function SettingsView(props) {
     setHolidayMsg("");
     try {
       const thisYear = new Date().getFullYear();
-      const list = await fetchKoreanHolidaysRange(thisYear - 1, thisYear + 2);
       const existing = new Set(
         (holidaysText || "")
           .split(/[\n,]+/)
           .map((s) => s.trim())
           .filter(Boolean)
       );
-      list.forEach((d) => existing.add(d));
-      const merged = [...existing].sort().join("\n");
-      setHolidaysText(merged);
+      const SRC = {
+        kasi: "천문연 공식",
+        official: "공식(CDN)",
+        builtin: "앱 내장",
+        nager: "임시(해외 API)",
+        fixed: "고정일만",
+      };
+      const parts = [];
+      const extras = [];
+      let thisYearSource = "";
+      let added = 0;
+      for (let y = thisYear - 1; y <= thisYear + 2; y++) {
+        const { dates, source } = await fetchKoreanHolidaysDetailed(y);
+        dates.forEach((d) => {
+          if (!existing.has(d)) {
+            existing.add(d);
+            added++;
+          }
+        });
+        parts.push(`${y} ${SRC[source] || source}`);
+        if (y === thisYear) thisYearSource = source;
+        // 공식 데이터가 있는 해: 공식에 없는 날짜는 알려주기만 (직접 넣은 회사 휴일일 수 있음)
+        if (source === "kasi" || source === "official") {
+          const off = new Set(dates);
+          [...existing]
+            .filter((d) => d.startsWith(`${y}-`) && !off.has(d))
+            .forEach((d) => extras.push(d));
+        }
+      }
+      setHolidaysText([...existing].sort().join("\n"));
+      try {
+        localStorage.setItem(
+          "holidaySyncInfo",
+          JSON.stringify({ source: thisYearSource, at: Date.now() })
+        );
+      } catch {}
+      setHolidayStamp(Date.now());
       setHolidayMsg(
-        `✅ ${list.length}개 공휴일 병합 완료 (${thisYear - 1} ~ ${
-          thisYear + 2
-        })`
+        `✅ ${added}개 추가 · ${parts.join(" / ")}` +
+          (extras.length
+            ? `\n⚠️ 공식 공휴일이 아닌 날짜 ${extras.length}개: ${extras.join(", ")} (직접 넣은 게 아니면 지우세요)`
+            : "")
       );
     } catch (err) {
       setHolidayMsg(`⚠️ 가져오기 실패 — ${err.message || "오프라인?"}`);
@@ -907,7 +934,7 @@ export default function SettingsView(props) {
               </div>
 
               {holidayMsg && (
-                <div className="mb-3 p-2 rounded-lg bg-gray-800/80 text-[11px] text-gray-200">
+                <div className="mb-3 p-2 rounded-lg bg-gray-800/80 text-[11px] text-gray-200 whitespace-pre-line">
                   {holidayMsg}
                 </div>
               )}
@@ -942,9 +969,10 @@ export default function SettingsView(props) {
                   setHolidaysText(normalizeHolidays(e.target.value))
                 }
               />
+              <HolidaySourceInfo />
               <div className="text-xs text-gray-400 mt-2 leading-relaxed">
                 • <span className="text-green-300">🇰🇷 자동 등록</span> → 한국
-                공휴일(설날·추석 포함)을 인터넷으로 가져와 병합
+                공휴일(한국천문연구원 특일정보 기준, 설·추석·대체·임시공휴일 포함)을 가져와 병합. 앱을 열 때도 1주일마다 자동 확인
                 <br />
                 • 쉼표(,) 또는 줄바꿈으로 수동 입력 가능
                 <br />• 일요일은 자동으로 '휴일' 처리됨
@@ -1336,5 +1364,62 @@ function TsvEditorSection({
         </div>
       )}
     </section>
+  );
+}
+
+// 공휴일 데이터 출처·신뢰도 안내
+const HOLIDAY_SOURCE_INFO = {
+  kasi: {
+    title: "한국천문연구원 특일정보 (공공데이터포털)",
+    note: "정부 공식 데이터 · 매년 발표되는 월력요항 기준, 대체·임시공휴일·선거일까지 반영 · 신뢰도 가장 높음",
+    tone: "text-emerald-300",
+  },
+  official: {
+    title: "월력요항 정리본 (공개 데이터, 예비 경로)",
+    note: "우주항공청 월력요항을 그대로 옮긴 공개 데이터 · 천문연 API 연결이 안 될 때 사용 · 신뢰도 높음",
+    tone: "text-emerald-300",
+  },
+  builtin: {
+    title: "앱 내장 목록",
+    note: "앱에 넣어 둔 2025~2027 목록 · 인터넷 없이 동작 · 앱 업데이트 시점 기준",
+    tone: "text-amber-300",
+  },
+  nager: {
+    title: "해외 공휴일 API (임시)",
+    note: "아직 정부 발표 전인 연도의 임시값 · 발표 후 자동으로 공식 데이터로 보완됨",
+    tone: "text-amber-300",
+  },
+  fixed: {
+    title: "양력 고정 공휴일만",
+    note: "설·추석이 빠져 있을 수 있음 · 인터넷 연결 후 자동 등록을 눌러 주세요",
+    tone: "text-rose-300",
+  },
+};
+
+function HolidaySourceInfo() {
+  let info = null;
+  try {
+    info = JSON.parse(localStorage.getItem("holidaySyncInfo") || "null");
+  } catch {}
+  const meta = HOLIDAY_SOURCE_INFO[info?.source] || {
+    title: "앱 내장 목록",
+    note: "아직 온라인 확인 전 · 앱을 열 때 1주일마다 자동 확인합니다",
+    tone: "text-gray-300",
+  };
+  const when = info?.at
+    ? new Date(info.at).toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      })
+    : "";
+  return (
+    <div className="mt-2 p-2 rounded-lg bg-gray-800/70 text-[11px] leading-relaxed">
+      <div className={meta.tone}>
+        출처: <b>{meta.title}</b>
+        {when ? <span className="text-gray-400"> · 마지막 확인 {when}</span> : null}
+      </div>
+      <div className="text-gray-400">{meta.note}</div>
+    </div>
   );
 }

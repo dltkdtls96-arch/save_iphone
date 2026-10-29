@@ -10,6 +10,7 @@
  */
 
 import JSZip from "jszip";
+import { KR_HOLIDAYS } from "./holidays.js";
 
 // ─────────────────────────────────────────────
 //  상수
@@ -154,10 +155,40 @@ function parseLines(text) {
     .filter(Boolean);
 }
 
-function normalizeWorktimeLine(raw) {
-  return String(raw || "")
+// 근무시간 한 줄 정리 + 데이터 오타 보정
+//  · "18::27" → "18:27", "18;00" → "18:00", "18.00" → "18:00"
+//  · "N~" (야간 다음날) 줄인데 "08:54" 처럼 앞의 "-" 가 빠진 경우 → "-08:54"
+//    (그대로 두면 "08:54 출근, 퇴근 없음" = 야간 출근으로 오인됨)
+function normalizeWorktimeLine(raw, code) {
+  let s = String(raw || "")
     .replace(/\s+/g, "")
-    .replace(/^-+$/, "----");
+    .replace(/^-+$/, "----")
+    .replace(/(\d{1,2})(?:::+|;|\.)(\d{2})/g, "$1:$2");
+  if (
+    code &&
+    /~$/.test(String(code).trim()) &&
+    /^\d{1,2}:\d{2}$/.test(s)
+  ) {
+    s = "-" + s;
+  }
+  return s;
+}
+
+// 이미 저장된 commonMap 의 근무시간도 같은 규칙으로 보정 (기존 사용자용)
+export function normalizeCommonWorktime(common) {
+  if (!common?.worktime) return common;
+  let changed = false;
+  const worktime = {};
+  for (const [dayType, map] of Object.entries(common.worktime)) {
+    const next = {};
+    for (const [code, line] of Object.entries(map || {})) {
+      const fixed = normalizeWorktimeLine(line, code);
+      if (fixed !== line) changed = true;
+      next[code] = fixed;
+    }
+    worktime[dayType] = next;
+  }
+  return changed ? { ...common, worktime } : common;
 }
 
 export function normalizeCode(code) {
@@ -352,7 +383,10 @@ function _parseWorktimeMap(text, gyobun) {
     .split("\n");
   const map = {};
   gyobun.forEach((code, idx) => {
-    map[normalizeCode(code)] = normalizeWorktimeLine(lines[idx] || "----");
+    map[normalizeCode(code)] = normalizeWorktimeLine(
+      lines[idx] || "----",
+      code
+    );
   });
   return map;
 }
@@ -699,7 +733,7 @@ export function getMidAlarmFromZip(
   if (s.endsWith("~")) {
     const entries = common.alarms[todayType]?.[s] || [];
     if (!entries.length) return null;
-    return { hm: entries[0].hm, source: `${todayType}/${s}.first` };
+    return { hm: entries[0].hm, source: `${todayType}/${s}.first`, dayOffset: 0 };
   }
 
   // 2) "Nd" — 숫자+d 패턴만 처리. "대N","휴N" 등은 null.
@@ -716,7 +750,12 @@ export function getMidAlarmFromZip(
     const tildeKey = `${num}~`;
     const entries = common.alarms[nextType]?.[tildeKey] || [];
     if (!entries.length) return null;
-    return { hm: entries[0].hm, source: `${nextType}/${tildeKey}.first` };
+    // 다음날 아침 시각 → 날짜도 +1일 (dayOffset)
+    return {
+      hm: entries[0].hm,
+      source: `${nextType}/${tildeKey}.first`,
+      dayOffset: 1,
+    };
   }
 
   // 주간: 오늘 요일 + Nd.txt 마지막 CD 또는 ET
@@ -730,7 +769,11 @@ export function getMidAlarmFromZip(
   // 첫 CD/ET는 "출근 승무"(LW와 같은 시각) — 제외하고 싶은데
   // 마지막을 고르면 자동으로 처리됨.
   const last = cdEt[cdEt.length - 1];
-  return { hm: last.hm, source: `${todayType}/${s}.last_${last.tag}` };
+  return {
+    hm: last.hm,
+    source: `${todayType}/${s}.last_${last.tag}`,
+    dayOffset: 0,
+  };
 }
 
 function _nextDateStr(dateStr) {
@@ -1156,9 +1199,68 @@ export async function repairCommonMapFromZipBlob(existingCommonMap) {
 //  한국 공휴일 자동
 // ─────────────────────────────────────────────
 
-export async function fetchKoreanHolidays(year) {
+// 공휴일 원본: 우주항공청(구 천문연) 월력요항을 정리한 공개 데이터
+//  - @hyunbinseo/holidays-kr (npm) 을 jsDelivr CDN 에서 바로 불러옴
+//    → API 키·서버 불필요, 브라우저에서 바로 호출 가능
+//  - "@5" 메이저만 고정 → 새 연도·임시공휴일이 반영된 최신 5.x 를 자동 사용
+//  - 서비스워커가 외부 스크립트를 캐시(external-cdn)하므로 오프라인에서도 동작
+const HOLIDAY_CDN = "https://cdn.jsdelivr.net/npm/@hyunbinseo/holidays-kr@5/+esm";
+let _holidayModPromise = null;
+function _loadHolidayModule() {
+  if (!_holidayModPromise) {
+    _holidayModPromise = import(/* @vite-ignore */ HOLIDAY_CDN).catch((e) => {
+      _holidayModPromise = null; // 다음에 다시 시도
+      throw e;
+    });
+  }
+  return _holidayModPromise;
+}
+
+// 반환: { dates: [...], source: "kasi" | "official" | "builtin" | "nager" | "fixed" }
+export async function fetchKoreanHolidaysDetailed(year) {
   const y = Number(year);
-  if (!Number.isFinite(y)) return [];
+  if (!Number.isFinite(y)) return { dates: [], source: "none" };
+
+  // 1) 한국천문연구원 특일정보 API (공공데이터포털) — 우리 Vercel 서버 함수 경유
+  //    /api/holidays 가 없거나(로컬 실행, iframe 다른 도메인) 실패하면 다음 출처로
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    const res = await fetch(`/api/holidays?year=${y}`, {
+      signal: ctrl.signal,
+      cache: "no-cache",
+    });
+    clearTimeout(timer);
+    if (res.ok && (res.headers.get("content-type") || "").includes("json")) {
+      const data = await res.json();
+      const dates = (data?.dates || []).filter((d) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(d)
+      );
+      if (dates.length) return { dates: dates.sort(), source: "kasi" };
+    }
+  } catch (e) {
+    console.warn("[holidays] 특일정보 API 실패", e);
+  }
+
+  // 2) 같은 월력요항을 정리한 공개 데이터 (CDN, 키 불필요)
+  try {
+    const mod = await _loadHolidayModule();
+    const preset = await mod.getHolidayPreset(String(y));
+    const dates = Object.keys(preset || {}).filter((d) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(d)
+    );
+    if (dates.length) return { dates: dates.sort(), source: "official" };
+  } catch (e) {
+    // RangeError = 아직 발표 안 된 연도, 그 외 = 네트워크 오류
+    if (!(e instanceof RangeError))
+      console.warn("[holidays] 공식 데이터 불러오기 실패", e);
+  }
+
+  // 3) 앱 내장 목록
+  const builtin = _builtinHolidays(y);
+  if (builtin.length) return { dates: builtin, source: "builtin" };
+
+  // 4) 아직 월력요항 발표 전인 먼 연도: 해외 API 로 임시값
   try {
     const res = await fetch(
       `https://date.nager.at/api/v3/PublicHolidays/${y}/KR`,
@@ -1169,12 +1271,17 @@ export async function fetchKoreanHolidays(year) {
       const list = Array.isArray(data)
         ? data.map((h) => h.date).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
         : [];
-      if (list.length) return Array.from(new Set(list)).sort();
+      if (list.length)
+        return { dates: Array.from(new Set(list)).sort(), source: "nager" };
     }
   } catch (e) {
     console.warn("[holidays] nager.at 실패", e);
   }
-  return _offlineKoreanHolidays(y);
+  return { dates: _offlineKoreanHolidays(y), source: "fixed" };
+}
+
+export async function fetchKoreanHolidays(year) {
+  return (await fetchKoreanHolidaysDetailed(year)).dates;
 }
 
 export async function fetchKoreanHolidaysRange(fromYear, toYear) {
@@ -1188,12 +1295,22 @@ export async function fetchKoreanHolidaysRange(fromYear, toYear) {
   return Array.from(new Set(all)).sort();
 }
 
+function _builtinHolidays(y) {
+  return KR_HOLIDAYS.filter((d) => d.startsWith(`${y}-`));
+}
+
 function _offlineKoreanHolidays(y) {
+  // 내장 목록에 그 해가 있으면 그것을 사용 (설·추석·대체공휴일 포함)
+  const builtin = _builtinHolidays(y);
+  if (builtin.length) return builtin;
+  // 내장 목록에 없는 해: 양력 고정 공휴일만 (설·추석은 직접 추가 필요)
   return [
     `${y}-01-01`,
     `${y}-03-01`,
+    ...(y >= 2026 ? [`${y}-05-01`] : []),
     `${y}-05-05`,
     `${y}-06-06`,
+    ...(y >= 2026 ? [`${y}-07-17`] : []),
     `${y}-08-15`,
     `${y}-10-03`,
     `${y}-10-09`,

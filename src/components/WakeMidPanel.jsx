@@ -500,9 +500,14 @@ export default function WakeMidPanel({
   const isTildeOff = /~$/.test(String(routeCode || "").trim());
 
   // 우선순위: 1) ZIP alarm (가장 정확) → 2) row 중간열 → 3) 소속별 하드코딩 테이블
-  const [baseHM, baseHMSource] = React.useMemo(() => {
+  // 야간 근무(콤보가 "평-토" 처럼 두 날짜)의 중간 시각은 "다음날 아침"
+  const isNightCombo = /-/.test(
+    String(routeCombo || "").replace(/\s*\([^)]*\)\s*$/, "")
+  );
+
+  const [baseHM, baseHMSource, baseDayOffset] = React.useMemo(() => {
     // 비번(~) 코드일 때는 midKey 없어도 일단 zip 시도
-    if (!midKey && !isTildeOff) return ["", ""];
+    if (!midKey && !isTildeOff) return ["", "", 0];
 
     // 1) ZIP alarm 기반 (제일 우선)
     if (commonData?.alarms && routeCode) {
@@ -518,7 +523,11 @@ export default function WakeMidPanel({
         try {
           const zipRes = getMidAlarmFromZip(commonData, routeCode, iso, hset);
           if (zipRes?.hm && toHM(zipRes.hm)) {
-            return [toHM(zipRes.hm), `zip:${zipRes.source}`];
+            return [
+              toHM(zipRes.hm),
+              `zip:${zipRes.source}`,
+              zipRes.dayOffset || 0,
+            ];
           }
         } catch (err) {
           console.warn("[mid alarm zip]", err);
@@ -529,14 +538,18 @@ export default function WakeMidPanel({
     // 2) TSV row 중간열 (구 방식) — midKey 있을 때만
     if (midKey) {
       const fromRow = toHM(row?.[midKey]);
-      if (fromRow) return [fromRow, "row"];
+      if (fromRow) return [fromRow, "row", isNightCombo ? 1 : 0];
 
       // 3) 하드코딩 MID_TABLES 폴백
       const fromDepot = lookupMidFromDepot(selectedDepot, midKey, routeDia);
-      return [fromDepot || "", fromDepot ? "table" : ""];
+      return [
+        fromDepot || "",
+        fromDepot ? "table" : "",
+        fromDepot && isNightCombo ? 1 : 0,
+      ];
     }
 
-    return ["", ""];
+    return ["", "", 0];
   }, [
     midKey,
     isTildeOff,
@@ -547,12 +560,20 @@ export default function WakeMidPanel({
     holidaySet,
     routeCode,
     selectedDate,
+    isNightCombo,
   ]);
 
   const baseDate = React.useMemo(() => {
-    const d = dateFromYMDHM(selectedDate, baseHM);
+    const day = toValidDate(selectedDate);
+    if (!day) return null;
+    const shifted = new Date(
+      day.getFullYear(),
+      day.getMonth(),
+      day.getDate() + (baseDayOffset || 0)
+    );
+    const d = dateFromYMDHM(shifted, baseHM);
     return d && !isNaN(d) ? d : null;
-  }, [selectedDate, baseHM]);
+  }, [selectedDate, baseHM, baseDayOffset]);
 
   const disabled = !baseDate;
 
@@ -679,6 +700,9 @@ export default function WakeMidPanel({
       <div className="rounded-xl bg-gray-900/60 p-3">
         <div>
           기준시각: <b>{baseHM || "데이터 없음"}</b>
+          {baseHM && baseDayOffset ? (
+            <span className="text-xs text-gray-400"> (다음날 {fmtYMD(baseDate)})</span>
+          ) : null}
         </div>
         {!baseHM && (
           <div className="text-rose-300 text-xs mt-1">

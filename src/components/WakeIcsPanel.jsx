@@ -145,7 +145,8 @@ const writeSaved = (from, to, step, boardPreMin) => {
 export default function WakeIcsPanel(props) {
   const who = props?.who ?? props?.name ?? "나";
   const baseDate =
-    toValidDate(props?.selectedDate ?? props?.date) ?? new Date();
+    toValidDate(props?.selectedDate ?? props?.date ?? props?.dateObj) ??
+    new Date();
 
   /* ===== 출근시간 계산 ===== */
   const inTime = React.useMemo(() => {

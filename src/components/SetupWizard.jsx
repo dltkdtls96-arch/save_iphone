@@ -63,6 +63,7 @@ function codeColorClass(depot, code) {
 
 export default function SetupWizard({
   onComplete,
+  onCancel, // 설정에서 다시 열었을 때만 전달 → 닫기 버튼 표시
   existingTsvData,
   defaultDepot = "안심",
 }) {
@@ -242,14 +243,17 @@ export default function SetupWizard({
   const nameList = depotData?.names?.filter(Boolean) || [];
   const gyobunList = depotData?.gyobun || [];
 
+  const [autoCode, setAutoCode] = useState("");
   function handleNameSelect(name) {
     setMyName(name);
     if (mode === "zip" && depotData && nameList.includes(name)) {
       const today = todayStr();
       const code = getCodeForDate(depotData, name, today);
       setMyCode(code || "");
+      setAutoCode(code || "");
     } else {
       setMyCode("");
+      setAutoCode("");
     }
   }
 
@@ -274,7 +278,39 @@ export default function SetupWizard({
       }
 
       const myData = rebuilt[key];
+      // 목록에 있는 이름인데 "오늘 교번" 을 계산값과 다르게 고른 경우
+      //  → 내가 고른 교번이 맞다고 보고 그 자리의 사람과 자리 교환.
+      //  (예전엔 이 선택을 무시해서, 기준 데이터가 오래돼 어긋난 경우
+      //   직접 고쳐도 반영이 안 됐음)
       if (
+        myName &&
+        myData?.names?.length &&
+        myData?.gyobun?.length &&
+        myData.names.includes(myName)
+      ) {
+        const nameIdx = myData.names.indexOf(myName);
+        const codeIdx = myData.gyobun.findIndex(
+          (c) => c.trim().toLowerCase() === myCode.trim().toLowerCase()
+        );
+        if (codeIdx >= 0 && codeIdx !== nameIdx) {
+          const newNames = [...myData.names];
+          const newPhones = [...(myData.phones || [])];
+          while (newPhones.length < newNames.length) newPhones.push("");
+          [newNames[nameIdx], newNames[codeIdx]] = [newNames[codeIdx], newNames[nameIdx]];
+          [newPhones[nameIdx], newPhones[codeIdx]] = [newPhones[codeIdx], newPhones[nameIdx]];
+          const bci = myData.gyobun.findIndex(
+            (c) =>
+              String(c || "").trim().toLowerCase() ===
+              String(myData.baseCode || "").trim().toLowerCase()
+          );
+          rebuilt[key] = {
+            ...myData,
+            names: newNames,
+            phones: newPhones,
+            baseName: bci >= 0 ? newNames[bci] : myData.baseName,
+          };
+        }
+      } else if (
         myName &&
         myData?.names?.length &&
         myData?.gyobun?.length &&
@@ -358,6 +394,17 @@ export default function SetupWizard({
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex items-start justify-center pt-10 px-4">
       <div className="w-full max-w-md bg-gray-800 rounded-2xl shadow-xl p-5">
+        {onCancel && (
+          <div className="flex justify-end -mt-1 mb-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 text-xs"
+            >
+              닫기 (변경 안 함)
+            </button>
+          </div>
+        )}
         {/* 진행 표시 */}
         <div className="flex items-center gap-1 mb-5">
           {[1, 2, 3, 4].map((n) => (
@@ -773,6 +820,17 @@ export default function SetupWizard({
 
             <div className="text-[11px] text-gray-500 mb-4">
               💡 헷갈리면 오늘 근무표에서 교번 번호를 확인하세요.
+              {mode === "zip" &&
+                myName &&
+                nameList.includes(myName) &&
+                myCode &&
+                autoCode &&
+                myCode !== autoCode && (
+                  <div className="mt-1 text-amber-300">
+                    계산된 교번은 {displayCode(autoCode)} 입니다. 완료하면{" "}
+                    {displayCode(myCode)} 자리 사람과 자리를 바꿉니다.
+                  </div>
+                )}
             </div>
 
             <button

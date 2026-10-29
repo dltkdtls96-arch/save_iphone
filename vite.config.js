@@ -31,15 +31,14 @@ export default defineConfig({
             type: "image/png",
             purpose: "any",
           },
-          // 추후 준비되면 아래 2개도 추가 권장:
-          // { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
-          // { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          { src: "/pwa-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
         ],
       },
       workbox: {
         // ✅ PNG 포함 → 행로표까지 프리캐시 (비행기 모드 100%)
         globPatterns: ["**/*.{js,css,html,png,webp,svg,ico,txt,woff2}"],
-        navigateFallback: "/index.html",
+        navigateFallback: "/index.html", navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           // 정적 이미지(해시된 /assets/* 포함) → CacheFirst
